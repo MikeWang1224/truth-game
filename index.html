@@ -270,9 +270,9 @@ function playSpin(angle,dur){
     var t0=c.currentTime+0.05,peg=36,n=Math.floor(angle/peg),last=-1;
     for(var k=1;k<=n;k++){
       var y=k*peg/angle,lo=0,hi=1;
-      for(var i=0;i<24;i++){var m=(lo+hi)/2;if(bez(m,.7,1)<y)lo=m;else hi=m}
-      var tt=bez((lo+hi)/2,.12,.1)*dur;
-      if(tt-last<0.025)continue;last=tt;
+      for(var i=0;i<24;i++){var m=(lo+hi)/2;if(bez(m,.61,1)<y)lo=m;else hi=m}
+      var tt=bez((lo+hi)/2,.22,.36)*dur;
+      if(tt-last<0.02)continue;last=tt;
       beep(t0+tt,900+(k%2)*120,0.03,0.07,"square");
     }
     beep(t0+dur+0.05,880,0.5,0.2,"sine");beep(t0+dur+0.05,1320,0.6,0.12,"sine");
@@ -381,19 +381,20 @@ function onData(d){
 function doSpin(q,pw){
   if(busy||!connected)return;
   pw=Math.max(0,Math.min(1,Number(pw)||0));
-  var d={type:"spin",t:Math.random()<.5?0:1,off:20+Math.random()*140,turns:3+Math.round(pw*6)+(Math.random()<.5?0:1),dur:3.4+pw*2,pw:pw,q:q};
+  var v0=870+pw*1330,dur=3.4+pw*1.6,turns=Math.max(3,Math.round(v0*dur/2.77/360-.5));
+  var d={type:"spin",t:Math.random()<.5?0:1,off:20+Math.random()*140,turns:turns,dur:dur,pw:pw,q:q};
   conn.send(d);runSpin(d);
 }
 function runSpin(d){
   if(busy)return;
-  var t=d.t===1?1:0,off=Math.max(15,Math.min(165,Number(d.off)||90)),turns=Math.max(3,Math.min(10,Number(d.turns)||3)),dur=Math.max(2.5,Math.min(6.5,Number(d.dur)||4.6)),pw=Math.max(0,Math.min(1,Number(d.pw)||0));
+  var t=d.t===1?1:0,off=Math.max(15,Math.min(165,Number(d.off)||90)),turns=Math.max(3,Math.min(14,Number(d.turns)||3)),dur=Math.max(2.5,Math.min(6.5,Number(d.dur)||4.6)),pw=Math.max(0,Math.min(1,Number(d.pw)||0));
   var q=typeof d.q==="string"?d.q.slice(0,300):"(空白題目)";
   if(used.indexOf(q)<0){used.push(q);saveUsed()}
   busy=true;$("spin").disabled=true;$("result").classList.add("hidden");$("status").textContent="轉動中…"+(d.pw!=null?"(力道 "+Math.round(pw*100)+"%)":"");
   var prev=rot;
   var base=prev+360*turns,tgt=-(t*180+off);
   rot=base+((((tgt-base)%360)+360)%360);
-  var w=$("wheel");w.style.transition="transform "+dur+"s cubic-bezier(.12,.7,.1,1)";w.style.transform="rotate("+rot+"deg)";
+  var w=$("wheel");w.style.transition="transform "+dur+"s cubic-bezier(.22,.61,.36,1)";w.style.transform="rotate("+rot+"deg)";
   playSpin(rot-prev,dur);
   clearTimeout(timer);
   timer=setTimeout(function(){
