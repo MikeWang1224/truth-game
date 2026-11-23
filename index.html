@@ -509,6 +509,7 @@ function chargeLoop(){
 }
 function chargeStart(e){
   if(ch||spinBtn.disabled||!connected||busy)return;
+  try{navigator.vibrate&&navigator.vibrate(10)}catch(x){}
   if(e&&e.pointerId!=null){try{spinBtn.setPointerCapture(e.pointerId)}catch(x){}}
   audio();
   ch={t0:performance.now(),p:0,pct:-1,step:0,raf:0,tone:toneStart()};
@@ -522,6 +523,7 @@ function chargeEnd(fire){
   spinBtn.classList.remove("charging","max");wheelWrap.classList.remove("charging");
   setPower(0);spinBtn.textContent="轉!";
   if(fire&&connected&&!busy&&!spinBtn.disabled){
+    try{navigator.vibrate&&navigator.vibrate(20+Math.round(p*40))}catch(x){}
     if(!reduceMotion)sparkBurst(p);
     var q=nextQuestion();
     if(isHost)doSpin(q,p);
