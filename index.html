@@ -41,7 +41,7 @@ button:disabled{opacity:.45;cursor:not-allowed}
   <input id="nm" type="text" maxlength="12" placeholder="例如:小明">
   <label for="rm">房間代號(兩人輸入相同代號才會連線,英數字)</label>
   <input id="rm" type="text" maxlength="20" placeholder="例如:love520">
-  <label>題庫(每行一題;目前 <span id="cnt">0</span> 題)</label>
+  <label>題庫(每行一題;目前 <span id="cnt">0</span> 題)<span id="src"></span></label>
   <textarea id="bank"></textarea>
   <div>
     <button class="alt" id="up">上傳 .txt / .csv</button>
@@ -91,6 +91,10 @@ function refreshCount(){bank=parseBank($("bank").value);$("cnt").textContent=ban
 var saved=load("tod_bank");
 $("bank").value=saved||DEFAULTS.join("\n");
 refreshCount();
+fetch("questions.txt",{cache:"no-store"}).then(function(r){if(!r.ok)throw 0;return r.text()}).then(function(t){
+  t=t.replace(/^\uFEFF/,"");
+  if(parseBank(t).length){$("bank").value=t;refreshCount();$("src").textContent="(已從 questions.txt 載入)"}
+}).catch(function(){});
 $("bank").addEventListener("input",function(){refreshCount();save("tod_bank",$("bank").value)});
 $("def").onclick=function(){$("bank").value=DEFAULTS.join("\n");refreshCount();save("tod_bank",$("bank").value)};
 $("up").onclick=function(){$("file").click()};
