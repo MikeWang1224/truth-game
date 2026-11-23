@@ -74,9 +74,10 @@ button:disabled{opacity:.45;cursor:not-allowed;transform:none}
 .pl0{justify-self:start;background:linear-gradient(135deg,var(--pink),var(--pink2))}.pl1{justify-self:end;background:linear-gradient(135deg,var(--blue),var(--blue2))}
 .vs{justify-self:center;font-size:12px;font-weight:800;color:var(--mute);letter-spacing:.1em}
 #status{text-align:center;margin-top:10px;min-height:18px}
-.roomrow{display:flex;align-items:center;justify-content:center;gap:10px;margin:-2px 0 12px;padding-bottom:12px;border-bottom:1px dashed var(--line)}
-.roomlbl{flex:none;font-size:12px;font-weight:700;color:var(--mute);padding:3px 10px;border-radius:99px;background:rgba(255,106,150,.12)}
-#roomtag{min-width:0;font-size:17px;font-weight:800;letter-spacing:.12em;color:var(--title);overflow-wrap:anywhere;text-align:center;line-height:1.3}
+#game>.card:first-child{position:relative;padding-top:24px}
+.roomtab{position:absolute;top:-11px;right:16px;max-width:calc(100% - 32px);display:flex;align-items:center;gap:7px;padding:4px 12px 4px 9px;border-radius:99px;background:var(--bg2);border:1px solid var(--pink2);box-shadow:0 4px 10px rgba(214,90,140,.18)}
+.roomlbl{flex:none;font-size:11px;font-weight:700;color:var(--mute)}
+#roomtag{min-width:0;font-size:13px;font-weight:800;letter-spacing:.08em;color:var(--title);overflow-wrap:anywhere;line-height:1.3}
 
 /* ---- 轉盤(簡化) ---- */
 .stage{display:flex;justify-content:center;margin:40px 0 22px}
@@ -186,7 +187,7 @@ footer{text-align:center;margin-top:22px;font-size:12px;color:var(--mute)}
 
 <section id="game" class="hidden">
   <div class="card">
-    <div class="roomrow"><span class="roomlbl">房號</span><b id="roomtag"></b></div>
+    <div class="roomtab"><span class="roomlbl">房號</span><b id="roomtag"></b></div>
     <div class="players"><span id="p0" class="pl pl0">等待中…</span><b class="vs">VS</b><span id="p1" class="pl pl1">等待對方…</span></div>
     <div class="small" id="status"></div>
   </div>
