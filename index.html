@@ -65,6 +65,11 @@ button:disabled{opacity:.45;cursor:not-allowed}
     <div class="small" style="text-align:center">回答完後,由任一方按「下一題」</div>
     <button id="next">下一題 ➜</button>
   </div>
+  <div style="margin-top:6px">
+    <button class="alt" id="hbtn">📖 歷史紀錄(0)</button>
+    <button class="alt" id="hclr">清除記憶</button>
+  </div>
+  <div id="hist" class="card hidden small" style="margin-top:8px"></div>
 </section>
 </main>
 
@@ -100,11 +105,32 @@ fetch("questions.txt",{cache:"no-store"}).then(function(r){if(!r.ok)throw 0;retu
   var b=parseBank(t.replace(/^\uFEFF/,""));if(b.length)bank=b;
 }).catch(function(){});
 
+var roomCode="default",hist=[];
+function saveUsed(){save("tod_used_"+roomCode,JSON.stringify(used))}
+function saveHist(){save("tod_hist_"+roomCode,JSON.stringify(hist))}
+function renderHist(){
+  $("hbtn").textContent="📖 歷史紀錄("+hist.length+")";
+  var box=$("hist");box.textContent="";
+  if(!hist.length){box.textContent="還沒有紀錄";return}
+  hist.slice().reverse().forEach(function(h){
+    var d=document.createElement("div");d.style.cssText="padding:8px 0;border-bottom:1px solid var(--line)";
+    var a=document.createElement("div");a.style.cssText="color:var(--ink);font-size:15px";a.textContent=h.q;
+    var b=document.createElement("div");b.textContent="回答:"+h.n+" · "+new Date(h.ts).toLocaleString();
+    d.appendChild(a);d.appendChild(b);box.appendChild(d);
+  });
+}
+function loadMem(){
+  try{used=JSON.parse(load("tod_used_"+roomCode)||"[]")}catch(e){used=[]}
+  try{hist=JSON.parse(load("tod_hist_"+roomCode)||"[]")}catch(e){hist=[]}
+  if(!Array.isArray(used))used=[];if(!Array.isArray(hist))hist=[];
+  renderHist();
+}
+function addHist(q,nm){hist.push({q:q,n:nm,ts:Date.now()});if(hist.length>300)hist=hist.slice(-300);saveHist();renderHist()}
 function nextQuestion(){
   var pool=bank.length?bank:DEFAULTS;
   var left=pool.filter(function(q){return used.indexOf(q)<0});
-  if(!left.length){used=[];left=pool.slice()}
-  var q=left[Math.floor(Math.random()*left.length)];used.push(q);return q;
+  if(!left.length){used=[];saveUsed();left=pool.slice()}
+  var q=left[Math.floor(Math.random()*left.length)];return q;
 }
 function short(n){return n.length>6?n.slice(0,6)+"…":n}
 function names(){return isHost?[myName,oppName]:[oppName,myName]}
@@ -123,6 +149,7 @@ function start(){
   myName=$("nm").value.trim()||NAMES[Math.floor(Math.random()*NAMES.length)]+Math.floor(Math.random()*90+10);
   var code=($("rm").value.trim()||"default").toLowerCase().replace(/[^a-z0-9]/g,"")||"default";
   hostId="tod-"+code+"-host";
+  roomCode=code;save("tod_name",$("nm").value.trim());save("tod_room",$("rm").value.trim());loadMem();
   $("setup").classList.add("hidden");$("game").classList.remove("hidden");
   render("連線中…");
   if(typeof Peer==="undefined"){render("⚠️ 無法載入連線元件,請檢查網路");return}
@@ -167,6 +194,7 @@ function runSpin(d){
   if(busy)return;
   var t=d.t===1?1:0,off=Math.max(15,Math.min(165,Number(d.off)||90)),turns=Math.max(4,Math.min(8,Number(d.turns)||5));
   var q=typeof d.q==="string"?d.q.slice(0,300):"(空白題目)";
+  if(used.indexOf(q)<0){used.push(q);saveUsed()}
   busy=true;$("spin").disabled=true;$("result").classList.add("hidden");$("status").textContent="轉動中…";
   var cur=rot-(((rot%360)+360)%360);
   rot=cur+360*turns-(t*180+off);
@@ -174,6 +202,7 @@ function runSpin(d){
   clearTimeout(timer);
   timer=setTimeout(function(){
     var mine=(t===meIdx()),nm=names()[t]||"?";
+    addHist(q,nm);
     var who=$("who");who.textContent="";
     var a=document.createElement("span");a.textContent="輪到 ";
     var b=document.createElement("b");b.textContent=nm;if(mine)b.className="me";
@@ -186,6 +215,9 @@ function doNext(){
   if(!busy)return;
   clearTimeout(timer);busy=false;$("result").classList.add("hidden");render();
 }
+$("nm").value=load("tod_name")||"";$("rm").value=load("tod_room")||"";
+$("hbtn").onclick=function(){$("hist").classList.toggle("hidden")};
+$("hclr").onclick=function(){if(confirm("清除這個房間在這台裝置上的歷史紀錄和已抽過的題目?")){used=[];hist=[];saveUsed();saveHist();renderHist()}};
 $("go").onclick=start;
 $("spin").onclick=function(){
   if(!connected||busy)return;
