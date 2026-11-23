@@ -74,6 +74,9 @@ button:disabled{opacity:.45;cursor:not-allowed;transform:none}
 .pl0{justify-self:start;background:linear-gradient(135deg,var(--pink),var(--pink2))}.pl1{justify-self:end;background:linear-gradient(135deg,var(--blue),var(--blue2))}
 .vs{justify-self:center;font-size:12px;font-weight:800;color:var(--mute);letter-spacing:.1em}
 #status{text-align:center;margin-top:10px;min-height:18px}
+.roomrow{display:flex;align-items:center;justify-content:center;gap:10px;margin:-2px 0 12px;padding-bottom:12px;border-bottom:1px dashed var(--line)}
+.roomlbl{flex:none;font-size:12px;font-weight:700;color:var(--mute);padding:3px 10px;border-radius:99px;background:rgba(255,106,150,.12)}
+#roomtag{min-width:0;font-size:17px;font-weight:800;letter-spacing:.12em;color:var(--title);overflow-wrap:anywhere;text-align:center;line-height:1.3}
 
 /* ---- 轉盤(簡化) ---- */
 .stage{display:flex;justify-content:center;margin:40px 0 22px}
@@ -183,6 +186,7 @@ footer{text-align:center;margin-top:22px;font-size:12px;color:var(--mute)}
 
 <section id="game" class="hidden">
   <div class="card">
+    <div class="roomrow"><span class="roomlbl">房號</span><b id="roomtag"></b></div>
     <div class="players"><span id="p0" class="pl pl0">等待中…</span><b class="vs">VS</b><span id="p1" class="pl pl1">等待對方…</span></div>
     <div class="small" id="status"></div>
   </div>
@@ -319,7 +323,7 @@ function start(){
   myName=$("nm").value.trim()||NAMES[Math.floor(Math.random()*NAMES.length)]+Math.floor(Math.random()*90+10);
   var code=($("rm").value.trim()||"default").toLowerCase().replace(/[^a-z0-9]/g,"")||"default";
   hostId="tod-"+code+"-host";
-  roomCode=code;save("tod_name",$("nm").value.trim());save("tod_room",$("rm").value.trim());loadMem();
+  roomCode=code;$("roomtag").textContent=code;save("tod_name",$("nm").value.trim());save("tod_room",$("rm").value.trim());loadMem();
   $("setup").classList.add("hidden");$("game").classList.remove("hidden");
   render("連線中…");
   if(typeof Peer==="undefined"){render("⚠️ 無法載入連線元件,請檢查網路");return}
