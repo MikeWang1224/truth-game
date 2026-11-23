@@ -336,7 +336,7 @@ function render(msg){
   $("p1").textContent=n[1]?n[1]+(me===1?"(你)":""):"等待對方…";
   $("t0").textContent=short(n[0]);$("t1").textContent=short(n[1]);
   $("spin").disabled=!(connected&&!busy&&canSpin());
-  if(!ch)$("spin").textContent=spinLabel();
+  if(!ch&&!watch)$("spin").textContent=spinLabel();
   if(msg)$("status").textContent=msg;
   else if(!busy)$("status").textContent=!connected?"等待對方加入…(請對方輸入相同房間代號)":(spinner===-1?"兩人到齊,按住「轉!」蓄力,放開就轉(越久越快,有上限)":(canSpin()?"換你轉!按住按鈕蓄力,放開就轉":"等 "+(oppName||"對方")+" 轉盤…"));
 }
@@ -383,7 +383,7 @@ function rejoin(ms){
 }
 function onLinkClosed(c){
   if(c!==conn)return;
-  connected=false;oppName="";busy=false;ansIdx=-1;spinner=-1;clearTimeout(timer);clearTimeout(pingTimer);$("result").classList.add("hidden");
+  stopWatch();connected=false;oppName="";busy=false;ansIdx=-1;spinner=-1;clearTimeout(timer);clearTimeout(pingTimer);$("result").classList.add("hidden");
   if(isHost)render("對方已離線,等待重新連線…");
   else{render("房主已離開,正在接手房間…");rejoin(300)}
 }
@@ -428,6 +428,7 @@ function onData(d){
   else if(d.type==="spin"&&!isHost){runSpin(d)}
   else if(d.type==="next"){if(ansIdx===1-meIdx())return;doNext()}
   else if(d.type==="sync"&&!isHost){applySync(d)}
+  else if(d.type==="charge"){if(d.on===true)startWatch();else stopWatch()}
   else if(d.type==="clear"){clearMem();$("status").textContent="對方已清除記憶"}
   else if(d.type==="ping"){try{conn.send({type:"pong"})}catch(e){}}
   else if(d.type==="pong"){clearTimeout(pingTimer)}
@@ -468,6 +469,7 @@ function doSpin(q,pw){
 }
 function runSpin(d){
   if(busy)return;
+  stopWatch();
   var t=d.t===1?1:0,off=Math.max(15,Math.min(165,Number(d.off)||90)),turns=Math.max(3,Math.min(14,Number(d.turns)||3)),dur=Math.max(2.5,Math.min(6.5,Number(d.dur)||4.6)),pw=Math.max(0,Math.min(1,Number(d.pw)||0));
   var q=typeof d.q==="string"?d.q.slice(0,300):"(空白題目)";
   var e=Array.isArray(d.e)&&d.e.length===4&&d.e.every(function(v){return typeof v==="number"&&v>=0&&v<=1})?d.e:EASES[0];
@@ -558,6 +560,36 @@ function sparkBurst(p){
     spark(w/2+(Math.random()-.5)*w*.5,h/2,Math.cos(a)*r,Math.sin(a)*r*.8);
   }
 }
+/* ===== 觀看對方蓄力(兩邊同步):對方按下/放開時各傳一次訊號,這邊用同樣的速度自己跑動畫 ===== */
+var watch=null;
+function sendCharge(on){try{if(connected&&conn)conn.send({type:"charge",on:on})}catch(e){}}
+function watchLoop(){
+  if(!watch)return;
+  if(!connected||busy||performance.now()-watch.t0>20000){stopWatch();return}
+  var p=Math.min(1,(performance.now()-watch.t0)/HOLD_MAX);
+  setPower(p);toneSet(watch.tone,p);
+  var pct=Math.round(p*100);
+  if(pct!==watch.pct){
+    watch.pct=pct;
+    spinBtn.textContent=short(oppName||"對方")+(p>=1?" MAX!":" 蓄力中… "+pct+"%");
+    if(p>=1)spinBtn.classList.add("max");
+  }
+  if(!reduceMotion&&Math.random()<.08+p*.4)sparkRise();
+  watch.raf=requestAnimationFrame(watchLoop);
+}
+function startWatch(){
+  if(watch||ch||busy||!connected)return;
+  audio();
+  watch={t0:performance.now(),pct:-1,raf:0,tone:toneStart()};
+  spinBtn.classList.add("charging");wheelWrap.classList.add("charging");
+  watchLoop();
+}
+function stopWatch(){
+  if(!watch)return;
+  cancelAnimationFrame(watch.raf);toneStop(watch.tone);watch=null;
+  spinBtn.classList.remove("charging","max");wheelWrap.classList.remove("charging");
+  setPower(0);spinBtn.textContent=spinLabel();
+}
 function chargeLoop(){
   if(!ch)return;
   if(spinBtn.disabled||!connected||busy){chargeEnd(false);return}
@@ -575,18 +607,19 @@ function chargeLoop(){
   ch.raf=requestAnimationFrame(chargeLoop);
 }
 function chargeStart(e){
-  if(ch||spinBtn.disabled||!connected||busy)return;
+  if(ch||watch||spinBtn.disabled||!connected||busy)return;
   haptic(10)
   if(e&&e.pointerId!=null){try{spinBtn.setPointerCapture(e.pointerId)}catch(x){}}
   audio();
   ch={t0:performance.now(),p:0,pct:-1,step:0,raf:0,tone:toneStart()};
   spinBtn.classList.add("charging");wheelWrap.classList.add("charging");
+  sendCharge(true);
   chargeLoop();
 }
 function chargeEnd(fire){
   if(!ch)return;
   var p=Math.min(1,(performance.now()-ch.t0)/HOLD_MAX);
-  cancelAnimationFrame(ch.raf);toneStop(ch.tone);ch=null;
+  cancelAnimationFrame(ch.raf);toneStop(ch.tone);ch=null;sendCharge(false);
   spinBtn.classList.remove("charging","max");wheelWrap.classList.remove("charging");
   setPower(0);spinBtn.textContent=spinLabel();
   if(fire&&connected&&!busy&&!spinBtn.disabled){
