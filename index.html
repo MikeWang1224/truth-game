@@ -7,73 +7,127 @@
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script src="turn_config.js"></script>
 <style>
-:root{--bg:#fff7f2;--card:#fff;--ink:#2b2230;--mute:#7a6f80;--a:#ff6b8b;--line:#eadfe6}
-@media (prefers-color-scheme:dark){:root{--bg:#1b1520;--card:#271f2e;--ink:#f4eef7;--mute:#a99db1;--line:#3a2f43}}
+:root{--bg1:#fff1f5;--bg2:#eef1ff;--card:rgba(255,255,255,.82);--ink:#2b2230;--mute:#85798c;--line:#efe3ea;--pink:#ff6b8b;--pink2:#ff9a8b;--blue:#6b8bff;--blue2:#8fb4ff;--shadow:0 10px 30px rgba(120,80,140,.12)}
+@media (prefers-color-scheme:dark){:root{--bg1:#1c1422;--bg2:#141a2e;--card:rgba(42,32,52,.82);--ink:#f6eff9;--mute:#b3a6bc;--line:#3d3047;--shadow:0 10px 30px rgba(0,0,0,.35)}}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0}
-body{background:var(--bg);color:var(--ink);font-family:-apple-system,"PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif;min-height:100vh;display:flex;justify-content:center}
-main{width:100%;max-width:480px;padding:20px 16px 40px;box-sizing:border-box}
-h1{text-align:center;font-size:26px;margin:8px 0 18px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:14px}
-label{display:block;font-size:13px;color:var(--mute);margin:10px 0 4px}
-input[type=text],textarea{width:100%;box-sizing:border-box;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--ink);font:inherit}
-textarea{min-height:110px;resize:vertical}
-button{font:inherit;border:0;border-radius:12px;padding:12px 18px;background:var(--a);color:#fff;font-weight:700;cursor:pointer;width:100%;margin-top:12px}
-button.alt{background:transparent;color:var(--ink);border:1px solid var(--line);font-weight:500;width:auto;padding:8px 12px;margin:8px 8px 0 0}
-button:disabled{opacity:.45;cursor:not-allowed}
+body{color:var(--ink);font-family:-apple-system,"PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif;min-height:100vh;display:flex;justify-content:center;
+ background:radial-gradient(900px 500px at 10% -10%,rgba(255,107,139,.22),transparent 60%),radial-gradient(800px 500px at 100% 10%,rgba(107,139,255,.22),transparent 60%),linear-gradient(160deg,var(--bg1),var(--bg2));background-attachment:fixed}
+.bg{position:fixed;inset:0;pointer-events:none;overflow:hidden;z-index:0}
+.bg i{position:absolute;font-style:normal;opacity:.13;font-size:34px;animation:floaty 9s ease-in-out infinite}
+.bg i:nth-child(1){left:6%;top:12%}.bg i:nth-child(2){right:8%;top:22%;animation-delay:-2s;font-size:42px}
+.bg i:nth-child(3){left:12%;top:58%;animation-delay:-4s;font-size:40px}.bg i:nth-child(4){right:10%;top:66%;animation-delay:-6s}
+.bg i:nth-child(5){left:46%;top:88%;animation-delay:-3s;font-size:30px}.bg i:nth-child(6){right:30%;top:6%;animation-delay:-5s;font-size:28px}
+@keyframes floaty{0%,100%{transform:translateY(0) rotate(-6deg)}50%{transform:translateY(-16px) rotate(6deg)}}
+main{position:relative;z-index:1;width:100%;max-width:520px;padding:22px 16px 36px}
+header{text-align:center;margin:6px 0 20px}
+.eyebrow{display:inline-block;font-size:11px;letter-spacing:.28em;font-weight:700;color:var(--pink);padding:4px 12px;border:1px solid var(--line);border-radius:99px;background:var(--card)}
+h1{margin:10px 0 4px;font-size:clamp(34px,9vw,46px);line-height:1.1;font-weight:900;letter-spacing:.04em;background:linear-gradient(90deg,var(--pink),#c06bff 55%,var(--blue));-webkit-background-clip:text;background-clip:text;color:transparent}
+.sub{margin:0;font-size:14px;color:var(--mute)}
+.card{background:var(--card);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid var(--line);border-radius:22px;padding:18px;margin-bottom:14px;box-shadow:var(--shadow)}
+.card h2{margin:0 0 4px;font-size:19px}
+.card .lead{margin:0 0 6px;font-size:13px;color:var(--mute)}
+label{display:flex;align-items:center;gap:6px;font-size:14px;font-weight:700;margin:16px 0 4px}
+label em{font-style:normal;font-weight:400;font-size:12px;color:var(--mute)}
+input[type=text]{width:100%;padding:13px 14px;border-radius:14px;border:1.5px solid var(--line);background:rgba(255,255,255,.55);color:var(--ink);font:inherit;font-size:16px;outline:none;transition:border-color .2s,box-shadow .2s}
+@media (prefers-color-scheme:dark){input[type=text]{background:rgba(0,0,0,.2)}}
+input[type=text]:focus{border-color:var(--pink);box-shadow:0 0 0 4px rgba(255,107,139,.18)}
+button{font:inherit;border:0;border-radius:16px;padding:14px 18px;background:linear-gradient(135deg,var(--pink),#ff8a6b);color:#fff;font-weight:800;font-size:17px;letter-spacing:.06em;cursor:pointer;width:100%;margin-top:16px;box-shadow:0 8px 20px rgba(255,107,139,.35);transition:transform .15s,box-shadow .15s,opacity .2s}
+button:hover{transform:translateY(-1px)}button:active{transform:translateY(1px) scale(.99)}
+button.alt{background:var(--card);color:var(--ink);border:1px solid var(--line);box-shadow:none;font-weight:600;font-size:13px;letter-spacing:0;width:auto;padding:9px 14px;margin:0;border-radius:99px}
+button:disabled{opacity:.45;cursor:not-allowed;transform:none}
+#spin{font-size:20px;padding:16px;background:linear-gradient(135deg,var(--blue),#a06bff 60%,var(--pink));box-shadow:0 10px 24px rgba(120,100,255,.4)}
 .small{font-size:13px;color:var(--mute)}
-.hidden{display:none}
-.wheelwrap{position:relative;width:min(80vw,320px);aspect-ratio:1;margin:10px auto 6px}
-.pointer{position:absolute;left:50%;top:-10px;transform:translateX(-50%);width:0;height:0;border-left:12px solid transparent;border-right:12px solid transparent;border-top:24px solid var(--ink);z-index:2}
-#wheel{width:100%;height:100%;display:block;border-radius:50%;box-shadow:0 6px 24px rgba(0,0,0,.18)}
-.q{font-size:22px;line-height:1.5;text-align:center;padding:10px 4px;font-weight:600}
-.who{text-align:center;font-size:15px;color:var(--mute)}
-.who b{color:var(--ink);font-size:20px}
-.me{color:var(--a)!important}
-.players{display:flex;justify-content:space-between;gap:8px;font-size:14px}
-.players span{padding:4px 10px;border-radius:99px;border:1px solid var(--line)}
+.hidden{display:none!important}
+.players{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.pl{display:inline-flex;align-items:center;gap:8px;max-width:42%;padding:8px 14px;border-radius:99px;font-weight:700;font-size:14px;color:#fff;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.pl::before{content:"";flex:none;width:9px;height:9px;border-radius:50%;background:#fff;opacity:.9}
+.pl0{background:linear-gradient(135deg,var(--pink),var(--pink2))}.pl1{background:linear-gradient(135deg,var(--blue),var(--blue2))}
+.vs{font-size:12px;font-weight:900;color:var(--mute);letter-spacing:.1em}
+#status{text-align:center;margin-top:10px;min-height:18px}
+.stage{display:flex;justify-content:center;margin:40px 0 22px}
+.wheelwrap{position:relative;width:min(80vw,340px);aspect-ratio:1}
+.ring{position:absolute;inset:-12px;border-radius:50%;background:conic-gradient(from 0deg,var(--pink),#ffd36b,var(--blue),#c06bff,var(--pink));box-shadow:0 12px 36px rgba(120,80,160,.3)}
+.ring::after{content:"";position:absolute;inset:8px;border-radius:50%;background:var(--bg1)}
+.pointer{position:absolute;left:50%;top:-22px;transform:translateX(-50%);width:0;height:0;border-left:13px solid transparent;border-right:13px solid transparent;border-top:28px solid var(--ink);z-index:3;filter:drop-shadow(0 3px 3px rgba(0,0,0,.3))}
+#wheel{position:relative;z-index:1;width:100%;height:100%;display:block;border-radius:50%}
+#t0,#t1{paint-order:stroke;stroke:rgba(0,0,0,.18);stroke-width:2px}
+.hub{position:absolute;z-index:2;left:50%;top:50%;transform:translate(-50%,-50%);width:17%;aspect-ratio:1;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:clamp(16px,5vw,24px);background:var(--bg1);box-shadow:0 0 0 4px var(--card),0 4px 12px rgba(0,0,0,.25);pointer-events:none}
+.result{text-align:center;position:relative;margin-top:16px;padding-top:26px}
+.result::before{content:"Q";position:absolute;top:-16px;left:50%;transform:translateX(-50%);width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:900;color:#fff;background:linear-gradient(135deg,var(--pink),var(--blue));box-shadow:0 4px 10px rgba(120,80,200,.4)}
+.result:not(.hidden){animation:pop .5s cubic-bezier(.2,1.4,.4,1)}
+@keyframes pop{from{opacity:0;transform:translateY(14px) scale(.94)}to{opacity:1;transform:none}}
+.who{font-size:15px;color:var(--mute)}.who b{color:var(--ink);font-size:22px}
+.me{color:var(--pink)!important}
+.q{font-size:clamp(20px,5.4vw,24px);line-height:1.6;font-weight:800;padding:12px 2px 10px}
+.tools{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin-top:6px}
+#hist{margin-top:12px;max-height:320px;overflow:auto}
+footer{text-align:center;margin-top:22px;font-size:12px;color:var(--mute)}
+@media (min-width:760px){main{max-width:580px;padding-top:36px}.wheelwrap{width:380px}.card{padding:22px}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
 <body>
+<div class="bg" aria-hidden="true"><i>💗</i><i>✨</i><i>🎡</i><i>🫣</i><i>💭</i><i>⭐</i></div>
 <main>
-<h1>🎡 真心話轉盤</h1>
-<div class="small" style="text-align:center;margin:-10px 0 14px">歡迎來到真心話時間,今晚誠實一點 🤫</div>
+<header>
+  <span class="eyebrow">TRUTH · TIME</span>
+  <h1>🎡 真心話轉盤</h1>
+  <p class="sub">歡迎來到真心話時間,今晚誠實一點 🤫</p>
+</header>
 
 <section id="setup" class="card">
-  <label for="nm">你的名字(不填就隨機取名)</label>
+  <h2>準備開始 ✨</h2>
+  <p class="lead">兩個人輸入相同的房間代號,就會自動連線。</p>
+  <label for="nm">🧑 你的名字 <em>不填就隨機取名</em></label>
   <input id="nm" type="text" maxlength="12" placeholder="例如:小明">
-  <label for="rm">房間代號(兩人輸入相同代號才會連線,英數字)</label>
+  <label for="rm">🔑 房間代號 <em>兩人要相同,英數字</em></label>
   <input id="rm" type="text" maxlength="20" placeholder="例如:love520">
-  <button id="go">進入遊戲</button>
+  <button id="go">進入遊戲 ➜</button>
 </section>
 
 <section id="game" class="hidden">
   <div class="card">
-    <div class="players"><span id="p0">等待中…</span><span id="p1">等待對方…</span></div>
-    <div class="small" id="status" style="text-align:center;margin-top:8px"></div>
+    <div class="players"><span id="p0" class="pl pl0">等待中…</span><b class="vs">VS</b><span id="p1" class="pl pl1">等待對方…</span></div>
+    <div class="small" id="status"></div>
   </div>
-  <div class="wheelwrap">
-    <div class="pointer"></div>
-    <svg id="wheel" viewBox="0 0 200 200">
-      <path d="M100,100 L100,0 A100,100 0 0 1 100,200 Z" fill="#ff6b8b"/>
-      <path d="M100,100 L100,200 A100,100 0 0 1 100,0 Z" fill="#6b8bff"/>
-      <text id="t0" x="150" y="100" fill="#fff" font-size="15" font-weight="700" text-anchor="middle" dominant-baseline="middle" transform="rotate(90 150 100)"></text>
-      <text id="t1" x="50" y="100" fill="#fff" font-size="15" font-weight="700" text-anchor="middle" dominant-baseline="middle" transform="rotate(-90 50 100)"></text>
+  <div class="stage">
+    <div class="wheelwrap">
+      <div class="ring"></div>
+      <div class="pointer"></div>
+      <svg id="wheel" viewBox="0 0 200 200">
+      <defs>
+        <linearGradient id="gP" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff8aa5"/><stop offset="1" stop-color="#ff5c80"/></linearGradient>
+        <linearGradient id="gB" x1="1" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8fa8ff"/><stop offset="1" stop-color="#5f7fff"/></linearGradient>
+      </defs>
+      <path d="M100,100 L100,0 A100,100 0 0 1 100,200 Z" fill="url(#gP)"/>
+      <path d="M100,100 L100,200 A100,100 0 0 1 100,0 Z" fill="url(#gB)"/>
+      <text x="181" y="100" font-size="13" text-anchor="middle" dominant-baseline="middle" transform="rotate(90 181 100)">💗</text>
+      <text x="19" y="100" font-size="13" text-anchor="middle" dominant-baseline="middle" transform="rotate(-90 19 100)">⭐</text>
+      <text id="t0" x="146" y="100" fill="#fff" font-size="15" font-weight="700" text-anchor="middle" dominant-baseline="middle" transform="rotate(90 146 100)"></text>
+      <text id="t1" x="54" y="100" fill="#fff" font-size="15" font-weight="700" text-anchor="middle" dominant-baseline="middle" transform="rotate(-90 54 100)"></text>
+      <circle cx="100.00" cy="6.00" r="2.4" fill="#fff" opacity=".9"/><circle cx="147.00" cy="18.59" r="2.4" fill="#fff" opacity=".9"/><circle cx="181.41" cy="53.00" r="2.4" fill="#fff" opacity=".9"/><circle cx="194.00" cy="100.00" r="2.4" fill="#fff" opacity=".9"/><circle cx="181.41" cy="147.00" r="2.4" fill="#fff" opacity=".9"/><circle cx="147.00" cy="181.41" r="2.4" fill="#fff" opacity=".9"/><circle cx="100.00" cy="194.00" r="2.4" fill="#fff" opacity=".9"/><circle cx="53.00" cy="181.41" r="2.4" fill="#fff" opacity=".9"/><circle cx="18.59" cy="147.00" r="2.4" fill="#fff" opacity=".9"/><circle cx="6.00" cy="100.00" r="2.4" fill="#fff" opacity=".9"/><circle cx="18.59" cy="53.00" r="2.4" fill="#fff" opacity=".9"/><circle cx="53.00" cy="18.59" r="2.4" fill="#fff" opacity=".9"/>
     </svg>
+      <div class="hub">🎲</div>
+    </div>
   </div>
   <button id="spin" disabled>轉!</button>
-  <div id="result" class="card hidden" style="margin-top:14px">
+
+  <div id="result" class="card result hidden">
     <div class="who" id="who"></div>
     <div class="q" id="question"></div>
-    <div class="small" style="text-align:center">回答完後,由任一方按「下一題」</div>
+    <div class="small">回答完後,由任一方按「下一題」</div>
     <button id="next">下一題 ➜</button>
   </div>
-  <div style="margin-top:6px">
+
+  <div class="tools" style="margin-top:14px">
     <button class="alt" id="hbtn">📖 歷史紀錄(0)</button>
     <button class="alt" id="hclr">清除記憶</button>
     <button class="alt" id="snd">🔊 音效開</button>
   </div>
-  <div id="hist" class="card hidden small" style="margin-top:8px"></div>
+  <div id="hist" class="card small hidden"></div>
 </section>
+<footer>為兩個人準備的小遊戲 💞</footer>
 </main>
 
 <script>
