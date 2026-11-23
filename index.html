@@ -465,6 +465,16 @@ $("go").onclick=start;
 var HOLD_MAX=1800,ch=null,spinBtn=$("spin"),wheelWrap=document.querySelector(".wheelwrap"),gameEl=$("game"),spWrap=document.querySelector(".spinwrap");
 var reduceMotion=window.matchMedia&&matchMedia("(prefers-reduced-motion:reduce)").matches;
 var SPARK=["#ffd36b","#ffffff","#ff9ec0","#ffb36b","#c6baff"];
+function haptic(ms){
+  if(navigator.vibrate){try{navigator.vibrate(ms)}catch(e){}return}
+  /* iOS Safari 不支援 vibrate:用隱藏的 <input type=checkbox switch> 觸發系統觸覺回饋(iOS 17.4+,每次只會輕點一下) */
+  try{
+    var l=document.createElement("label");l.setAttribute("aria-hidden","true");
+    l.style.cssText="position:fixed;left:-9999px;top:0;opacity:0;pointer-events:none";
+    var i=document.createElement("input");i.type="checkbox";i.setAttribute("switch","");
+    l.appendChild(i);document.body.appendChild(l);l.click();document.body.removeChild(l);
+  }catch(e){}
+}
 function setPower(p){gameEl.style.setProperty("--p",p.toFixed(3))}
 function toneStart(){
   if(muted)return null;var c=audio();if(!c)return null;
@@ -502,14 +512,14 @@ function chargeLoop(){
     spinBtn.textContent=p>=1?"MAX!  放開!":"蓄力中… "+pct+"%";
     if(p>=1)spinBtn.classList.add("max");
     var step=Math.floor(p*4);
-    if(step>ch.step){ch.step=step;try{navigator.vibrate&&navigator.vibrate(12)}catch(e){}}
+    if(step>ch.step){ch.step=step;haptic(12)}
   }
   if(!reduceMotion&&Math.random()<.08+p*.4)sparkRise();
   ch.raf=requestAnimationFrame(chargeLoop);
 }
 function chargeStart(e){
   if(ch||spinBtn.disabled||!connected||busy)return;
-  try{navigator.vibrate&&navigator.vibrate(10)}catch(x){}
+  haptic(10)
   if(e&&e.pointerId!=null){try{spinBtn.setPointerCapture(e.pointerId)}catch(x){}}
   audio();
   ch={t0:performance.now(),p:0,pct:-1,step:0,raf:0,tone:toneStart()};
@@ -523,7 +533,7 @@ function chargeEnd(fire){
   spinBtn.classList.remove("charging","max");wheelWrap.classList.remove("charging");
   setPower(0);spinBtn.textContent="轉!";
   if(fire&&connected&&!busy&&!spinBtn.disabled){
-    try{navigator.vibrate&&navigator.vibrate(20+Math.round(p*40))}catch(x){}
+    haptic(20+Math.round(p*40))
     if(!reduceMotion)sparkBurst(p);
     var q=nextQuestion();
     if(isHost)doSpin(q,p);
