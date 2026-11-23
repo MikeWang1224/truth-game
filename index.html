@@ -52,7 +52,7 @@ h1{margin:10px 0 4px;font-size:clamp(34px,9vw,46px);line-height:1.1;font-weight:
 .card{background:var(--card);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid var(--line);border-radius:24px;padding:20px;margin-bottom:14px;box-shadow:var(--shadow)}
 .card h2{margin:0 0 4px;font-size:20px;color:var(--title)}
 .card .lead{margin:0 0 6px;font-size:13px;color:var(--mute)}
-label{display:flex;align-items:center;gap:6px;font-size:14px;font-weight:700;margin:16px 0 4px}
+label{display:flex;flex-wrap:wrap;align-items:center;gap:2px 6px;font-size:14px;font-weight:700;margin:16px 0 4px}
 label em{font-style:normal;font-weight:400;font-size:12px;color:var(--mute)}
 input[type=text]{width:100%;padding:13px 16px;border-radius:99px;border:1.5px solid var(--line);background:var(--field);color:var(--ink);font:inherit;font-size:16px;outline:none;transition:border-color .2s,box-shadow .2s}
 input[type=text]::placeholder{color:var(--mute);opacity:.7}
@@ -180,7 +180,7 @@ footer{text-align:center;margin-top:22px;font-size:12px;color:var(--mute)}
   <p class="lead">兩個人輸入相同的房間代號,就會自動連線。</p>
   <label for="nm">🧑 你的名字 <em>不填就隨機取名</em></label>
   <input id="nm" type="text" maxlength="12" placeholder="例如:小明">
-  <label for="rm">🔑 房間代號 <em>兩人要相同,英數字</em></label>
+  <label for="rm">🔑 房間代號 <em>兩人要相同,英數字;不填會自動產生</em></label>
   <input id="rm" type="text" maxlength="20" placeholder="例如:love520">
   <button id="go">進入遊戲 ➜</button>
 </section>
@@ -306,6 +306,13 @@ function nextQuestion(){
   if(!left.length){used=[];saveUsed();left=pool.slice()}
   var q=left[Math.floor(Math.random()*left.length)];return q;
 }
+function randCode(){
+  var A="abcdefghjkmnpqrstuvwxyz23456789",o="",r=null;
+  try{r=crypto.getRandomValues(new Uint32Array(6))}catch(e){}
+  for(var i=0;i<6;i++)o+=A.charAt((r?r[i]:Math.floor(Math.random()*1e9))%A.length);
+  return o;
+}
+function hashStr(s){var h=5381;for(var i=0;i<s.length;i++)h=((h<<5)+h+s.charCodeAt(i))>>>0;return h.toString(36)}
 function short(n){return n.length>6?n.slice(0,6)+"…":n}
 function names(){return isHost?[myName,oppName]:[oppName,myName]}
 function meIdx(){return isHost?0:1}
@@ -322,10 +329,12 @@ function render(msg){
 function start(){
   audio();
   myName=$("nm").value.trim()||NAMES[Math.floor(Math.random()*NAMES.length)]+Math.floor(Math.random()*90+10);
-  var code=($("rm").value.trim()||"default").toLowerCase().replace(/[^a-z0-9]/g,"")||"default";
+  var raw=$("rm").value.trim(),code=raw.toLowerCase().replace(/[^a-z0-9]/g,"");
+  if(!code)code=raw?"x"+hashStr(raw):randCode();
+  if(!raw)$("rm").value=code;
   hostId="tod-"+code+"-host";
   roomCode=code;$("roomtag").textContent=code;save("tod_name",$("nm").value.trim());save("tod_room",$("rm").value.trim());loadMem();
-  $("setup").classList.add("hidden");$("game").classList.remove("hidden");
+  $("setup").classList.add("hidden");$("game").classList.remove("hidden");wakeOn();
   render("連線中…");
   if(typeof Peer==="undefined"){render("⚠️ 無法載入連線元件,請檢查網路");return}
   becomeHost();
@@ -357,17 +366,44 @@ function rejoin(ms){
     becomeHost();
   },ms||0);
 }
+function onLinkClosed(c){
+  if(c!==conn)return;
+  connected=false;oppName="";busy=false;clearTimeout(timer);clearTimeout(pingTimer);$("result").classList.add("hidden");
+  if(isHost)render("對方已離線,等待重新連線…");
+  else{render("房主已離開,正在接手房間…");rejoin(300)}
+}
+var wake=null,pingTimer=null;
+function wakeOn(){
+  try{
+    if(!navigator.wakeLock||wake||document.visibilityState!=="visible")return;
+    navigator.wakeLock.request("screen").then(function(l){
+      wake=l;l.addEventListener("release",function(){if(wake===l)wake=null});
+    }).catch(function(){});
+  }catch(e){}
+}
+function checkLink(){
+  if(!peer)return;
+  if(peer.destroyed){rejoin(0);return}
+  if(peer.disconnected){try{peer.reconnect()}catch(e){}}
+  if(connected&&conn){
+    clearTimeout(pingTimer);
+    try{conn.send({type:"ping"})}catch(e){}
+    pingTimer=setTimeout(function(){
+      var c=conn;if(!connected||!c)return;
+      try{c.close()}catch(e){}
+      setTimeout(function(){if(connected&&conn===c)onLinkClosed(c)},150);
+    },2500);
+  }
+}
+document.addEventListener("visibilitychange",function(){if(document.visibilityState==="visible"&&peer){wakeOn();checkLink()}});
+window.addEventListener("pageshow",function(e){if(e.persisted&&peer){wakeOn();checkLink()}});
+window.addEventListener("online",function(){if(peer)checkLink()});
 function setup(c){
   conn=c;
   var opened=function(){connected=true;c.send({type:"hello",name:myName});render()};
   c.on("open",opened);if(c.open)opened();
   c.on("data",onData);
-  c.on("close",function(){
-    if(c!==conn)return;
-    connected=false;oppName="";busy=false;clearTimeout(timer);$("result").classList.add("hidden");
-    if(isHost)render("對方已離線,等待重新連線…");
-    else{render("房主已離開,正在接手房間…");rejoin(300)}
-  });
+  c.on("close",function(){onLinkClosed(c)});
   c.on("error",function(){render("⚠️ 連線中斷(兩邊網路可能無法直連,需設定 TURN)")});
 }
 function onData(d){
@@ -377,6 +413,8 @@ function onData(d){
   else if(d.type==="spin"&&!isHost){runSpin(d)}
   else if(d.type==="next"){doNext()}
   else if(d.type==="clear"){clearMem();$("status").textContent="對方已清除記憶"}
+  else if(d.type==="ping"){try{conn.send({type:"pong"})}catch(e){}}
+  else if(d.type==="pong"){clearTimeout(pingTimer)}
 }
 function doSpin(q,pw){
   if(busy||!connected)return;
