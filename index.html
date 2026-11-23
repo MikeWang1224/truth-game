@@ -465,15 +465,21 @@ $("go").onclick=start;
 var HOLD_MAX=1800,ch=null,spinBtn=$("spin"),wheelWrap=document.querySelector(".wheelwrap"),gameEl=$("game"),spWrap=document.querySelector(".spinwrap");
 var reduceMotion=window.matchMedia&&matchMedia("(prefers-reduced-motion:reduce)").matches;
 var SPARK=["#ffd36b","#ffffff","#ff9ec0","#ffb36b","#c6baff"];
-function haptic(ms){
-  if(navigator.vibrate){try{navigator.vibrate(ms)}catch(e){}return}
-  /* iOS Safari 不支援 vibrate:用隱藏的 <input type=checkbox switch> 觸發系統觸覺回饋(iOS 17.4+,每次只會輕點一下) */
+var hapLabel=null;
+function hapInit(){
+  if(hapLabel||!document.body)return;
   try{
     var l=document.createElement("label");l.setAttribute("aria-hidden","true");
-    l.style.cssText="position:fixed;left:-9999px;top:0;opacity:0;pointer-events:none";
-    var i=document.createElement("input");i.type="checkbox";i.setAttribute("switch","");
-    l.appendChild(i);document.body.appendChild(l);l.click();document.body.removeChild(l);
+    l.style.cssText="position:fixed;left:0;top:0;width:1px;height:1px;overflow:hidden;opacity:.01;pointer-events:none;z-index:-1";
+    var i=document.createElement("input");i.type="checkbox";i.setAttribute("switch","");i.tabIndex=-1;
+    l.appendChild(i);document.body.appendChild(l);hapLabel=l;
   }catch(e){}
+}
+function haptic(ms){
+  if(navigator.vibrate){try{navigator.vibrate(ms)}catch(e){}return}
+  /* iOS Safari 不支援 vibrate:改點隱藏的 <input type=checkbox switch> 觸發系統觸覺回饋(iOS 17.4+,只會輕點一下) */
+  hapInit();
+  try{if(hapLabel)hapLabel.click()}catch(e){}
 }
 function setPower(p){gameEl.style.setProperty("--p",p.toFixed(3))}
 function toneStart(){
