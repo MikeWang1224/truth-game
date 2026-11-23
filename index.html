@@ -63,6 +63,7 @@ button:hover{transform:translateY(-1px)}button:active{transform:translateY(1px) 
 button:focus-visible{outline:3px solid rgba(255,106,150,.5);outline-offset:3px}
 button.alt{background:var(--card);color:var(--ink);border:1px solid var(--line);box-shadow:none;font-weight:600;font-size:13px;letter-spacing:0;width:auto;padding:9px 14px;margin:0}
 button:disabled{opacity:.45;cursor:not-allowed;transform:none}
+#next:disabled{background:#c9c9d3;box-shadow:none;opacity:1;color:#fff}
 #spin{font-size:20px;padding:16px;margin-top:20px;background:linear-gradient(135deg,#ff86ab,#ff5c8a);box-shadow:0 0 0 6px rgba(255,255,255,.5),0 12px 26px rgba(255,92,138,.38)}
 @media (prefers-color-scheme:dark){#spin{box-shadow:0 0 0 6px rgba(255,255,255,.08),0 12px 26px rgba(255,92,138,.3)}}
 .small{font-size:13px;color:var(--mute)}
@@ -214,7 +215,7 @@ footer{text-align:center;margin-top:22px;font-size:12px;color:var(--mute)}
   <div id="result" class="card result hidden">
     <div class="who" id="who"></div>
     <div class="q" id="question"></div>
-    <div class="small">回答完後,由任一方按「下一題」</div>
+    <div class="small" id="hint">回答完後,由另一方按「下一題」</div>
     <button id="next">下一題 ➜</button>
   </div>
 
@@ -250,7 +251,7 @@ var PEER_OPTS={config:{iceServers:ICE}};
 var NAMES=["小橘貓","大白鯊","奶茶控","芒果冰","夜貓子","小熊餅乾","月亮兔","柴犬君","泡麵王","星星糖"];
 var $=function(i){return document.getElementById(i)};
 var bank=[],used=[];
-var peer=null,conn=null,isHost=false,connected=false,myName="",oppName="",busy=false,rot=0,timer=null,hostId="";
+var peer=null,conn=null,isHost=false,connected=false,myName="",oppName="",busy=false,rot=0,timer=null,hostId="",ansIdx=-1,spinner=-1;
 
 function save(k,v){try{localStorage.setItem(k,v)}catch(e){}}
 function load(k){try{return localStorage.getItem(k)}catch(e){return null}}
@@ -264,14 +265,15 @@ var actx=null,muted=load("tod_mute")==="1";
 function audio(){try{if(!actx){var C=window.AudioContext||window.webkitAudioContext;if(C)actx=new C()}if(actx&&actx.state==="suspended")actx.resume()}catch(e){}return actx}
 function beep(t,f,dur,vol,type){var o=actx.createOscillator(),g=actx.createGain();o.type=type||"square";o.frequency.value=f;g.gain.setValueAtTime(vol,t);g.gain.exponentialRampToValueAtTime(0.0001,t+dur);o.connect(g);g.connect(actx.destination);o.start(t);o.stop(t+dur+0.02)}
 function bez(p,a,b){var u=1-p;return 3*u*u*p*a+3*u*p*p*b+p*p*p}
-function playSpin(angle,dur){
+function playSpin(angle,dur,e){
+  e=e||[.22,.61,.36,1];
   if(muted)return;var c=audio();if(!c)return;
   try{
     var t0=c.currentTime+0.05,peg=36,n=Math.floor(angle/peg),last=-1;
     for(var k=1;k<=n;k++){
       var y=k*peg/angle,lo=0,hi=1;
-      for(var i=0;i<24;i++){var m=(lo+hi)/2;if(bez(m,.61,1)<y)lo=m;else hi=m}
-      var tt=bez((lo+hi)/2,.22,.36)*dur;
+      for(var i=0;i<24;i++){var m=(lo+hi)/2;if(bez(m,e[1],e[3])<y)lo=m;else hi=m}
+      var tt=bez((lo+hi)/2,e[0],e[2])*dur;
       if(tt-last<0.02)continue;last=tt;
       beep(t0+tt,900+(k%2)*120,0.03,0.07,"square");
     }
@@ -316,14 +318,22 @@ function hashStr(s){var h=5381;for(var i=0;i<s.length;i++)h=((h<<5)+h+s.charCode
 function short(n){return n.length>6?n.slice(0,6)+"…":n}
 function names(){return isHost?[myName,oppName]:[oppName,myName]}
 function meIdx(){return isHost?0:1}
+function canSpin(){return spinner===-1||spinner===meIdx()}
+function spinLabel(){
+  if(!connected)return "轉!";
+  if(busy)return "進行中…";
+  if(!canSpin())return "⏳ 等 "+short(oppName||"對方")+" 轉盤";
+  return spinner===meIdx()?"🎯 換你轉!":"轉!";
+}
 function render(msg){
   var n=names(),me=meIdx();
   $("p0").textContent=n[0]?n[0]+(me===0?"(你)":""):"等待對方…";
   $("p1").textContent=n[1]?n[1]+(me===1?"(你)":""):"等待對方…";
   $("t0").textContent=short(n[0]);$("t1").textContent=short(n[1]);
-  $("spin").disabled=!(connected&&!busy);
+  $("spin").disabled=!(connected&&!busy&&canSpin());
+  if(!ch)$("spin").textContent=spinLabel();
   if(msg)$("status").textContent=msg;
-  else if(!busy)$("status").textContent=connected?"兩人到齊,按住「轉!」蓄力,放開就轉(越久越快,有上限)":"等待對方加入…(請對方輸入相同房間代號)";
+  else if(!busy)$("status").textContent=!connected?"等待對方加入…(請對方輸入相同房間代號)":(spinner===-1?"兩人到齊,按住「轉!」蓄力,放開就轉(越久越快,有上限)":(canSpin()?"換你轉!按住按鈕蓄力,放開就轉":"等 "+(oppName||"對方")+" 轉盤…"));
 }
 
 function start(){
@@ -368,7 +378,7 @@ function rejoin(ms){
 }
 function onLinkClosed(c){
   if(c!==conn)return;
-  connected=false;oppName="";busy=false;clearTimeout(timer);clearTimeout(pingTimer);$("result").classList.add("hidden");
+  connected=false;oppName="";busy=false;ansIdx=-1;spinner=-1;clearTimeout(timer);clearTimeout(pingTimer);$("result").classList.add("hidden");
   if(isHost)render("對方已離線,等待重新連線…");
   else{render("房主已離開,正在接手房間…");rejoin(300)}
 }
@@ -409,31 +419,41 @@ function setup(c){
 function onData(d){
   if(!d||typeof d!=="object")return;
   if(d.type==="hello"){oppName=String(d.name||"對方").slice(0,12);render()}
-  else if(d.type==="req"&&isHost){doSpin(typeof d.q==="string"?d.q:nextQuestion(),d.pw)}
+  else if(d.type==="req"&&isHost&&(spinner===-1||spinner===1)){doSpin(typeof d.q==="string"?d.q:nextQuestion(),d.pw)}
   else if(d.type==="spin"&&!isHost){runSpin(d)}
-  else if(d.type==="next"){doNext()}
+  else if(d.type==="next"){if(ansIdx===1-meIdx())return;doNext()}
   else if(d.type==="clear"){clearMem();$("status").textContent="對方已清除記憶"}
   else if(d.type==="ping"){try{conn.send({type:"pong"})}catch(e){}}
   else if(d.type==="pong"){clearTimeout(pingTimer)}
 }
+function rnd(){try{var a=new Uint32Array(1);crypto.getRandomValues(a);return a[0]/4294967296}catch(e){return Math.random()}}
+var EASES=[[.22,.61,.36,1],[.16,.72,.2,1],[.3,.5,.3,1]];
 function doSpin(q,pw){
   if(busy||!connected)return;
   pw=Math.max(0,Math.min(1,Number(pw)||0));
-  var v0=870+pw*1330,dur=3.4+pw*1.6,turns=Math.max(3,Math.round(v0*dur/2.77/360-.5));
-  var d={type:"spin",t:Math.random()<.5?0:1,off:20+Math.random()*140,turns:turns,dur:dur,pw:pw,q:q};
+  /* 結果由房主用加密亂數決定,和力道完全無關;力道只影響「轉得多猛」,而且圈數、時間都再加隨機抖動,
+     所以看圈數或時間長短,都推不出會停在誰那邊 */
+  var t=rnd()<.5?0:1;
+  var turns=Math.round(4+pw*7+(rnd()*3-1.5));
+  var dur=3.6+pw*1.4+rnd()*1.4;
+  var off=15+rnd()*150;
+  var e=EASES[Math.floor(rnd()*EASES.length)];
+  var d={type:"spin",t:t,off:off,turns:turns,dur:dur,pw:pw,q:q,e:e};
   conn.send(d);runSpin(d);
 }
 function runSpin(d){
   if(busy)return;
   var t=d.t===1?1:0,off=Math.max(15,Math.min(165,Number(d.off)||90)),turns=Math.max(3,Math.min(14,Number(d.turns)||3)),dur=Math.max(2.5,Math.min(6.5,Number(d.dur)||4.6)),pw=Math.max(0,Math.min(1,Number(d.pw)||0));
   var q=typeof d.q==="string"?d.q.slice(0,300):"(空白題目)";
+  var e=Array.isArray(d.e)&&d.e.length===4&&d.e.every(function(v){return typeof v==="number"&&v>=0&&v<=1})?d.e:EASES[0];
+  ansIdx=t;
   if(used.indexOf(q)<0){used.push(q);saveUsed()}
-  busy=true;$("spin").disabled=true;$("result").classList.add("hidden");$("status").textContent="轉動中…"+(d.pw!=null?"(力道 "+Math.round(pw*100)+"%)":"");
+  busy=true;$("spin").disabled=true;if(!ch)$("spin").textContent=spinLabel();$("result").classList.add("hidden");$("status").textContent="轉動中…"+(d.pw!=null?"(力道 "+Math.round(pw*100)+"%)":"");
   var prev=rot;
   var base=prev+360*turns,tgt=-(t*180+off);
   rot=base+((((tgt-base)%360)+360)%360);
-  var w=$("wheel");w.style.transition="transform "+dur+"s cubic-bezier(.22,.61,.36,1)";w.style.transform="rotate("+rot+"deg)";
-  playSpin(rot-prev,dur);
+  var w=$("wheel");w.style.transition="transform "+dur+"s cubic-bezier("+e.join(",")+")";w.style.transform="rotate("+rot+"deg)";
+  playSpin(rot-prev,dur,e);
   clearTimeout(timer);
   timer=setTimeout(function(){
     var mine=(t===meIdx()),nm=names()[t]||"?";
@@ -443,12 +463,18 @@ function runSpin(d){
     var b=document.createElement("b");b.textContent=nm;if(mine)b.className="me";
     var c=document.createElement("span");c.textContent=mine?" 回答!(就是你)":" 回答!";
     who.appendChild(a);who.appendChild(b);who.appendChild(c);
-    $("question").textContent=q;$("result").classList.remove("hidden");$("status").textContent="";
+    $("question").textContent=q;$("result").classList.remove("hidden");$("status").textContent="";roleUI();
   },Math.round(dur*1000)+100);
+}
+function roleUI(){
+  var answering=(ansIdx===meIdx()),nx=$("next");
+  nx.disabled=answering;
+  nx.textContent=answering?"🎤 發言中…":"下一題 ➜";
+  $("hint").textContent=answering?"等對方聽到滿意,由對方按「下一題」":"對方回答到你滿意後,請由你按「下一題」";
 }
 function doNext(){
   if(!busy)return;
-  clearTimeout(timer);busy=false;$("result").classList.add("hidden");render();
+  clearTimeout(timer);busy=false;spinner=ansIdx;ansIdx=-1;$("result").classList.add("hidden");render();
 }
 $("nm").value=load("tod_name")||"";$("rm").value=load("tod_room")||"";
 $("snd").onclick=function(){muted=!muted;save("tod_mute",muted?"1":"0");renderSnd();audio()};
@@ -537,7 +563,7 @@ function chargeEnd(fire){
   var p=Math.min(1,(performance.now()-ch.t0)/HOLD_MAX);
   cancelAnimationFrame(ch.raf);toneStop(ch.tone);ch=null;
   spinBtn.classList.remove("charging","max");wheelWrap.classList.remove("charging");
-  setPower(0);spinBtn.textContent="轉!";
+  setPower(0);spinBtn.textContent=spinLabel();
   if(fire&&connected&&!busy&&!spinBtn.disabled){
     haptic(20+Math.round(p*40))
     if(!reduceMotion)sparkBurst(p);
@@ -554,7 +580,7 @@ spinBtn.addEventListener("contextmenu",function(e){e.preventDefault()});
 spinBtn.addEventListener("keydown",function(e){if((e.key===" "||e.key==="Enter")&&!e.repeat){e.preventDefault();chargeStart()}});
 spinBtn.addEventListener("keyup",function(e){if(e.key===" "||e.key==="Enter"){e.preventDefault();chargeEnd(true)}});
 spinBtn.addEventListener("blur",function(){chargeEnd(false)});
-$("next").onclick=function(){if(connected)conn.send({type:"next"});doNext()};
+$("next").onclick=function(){if(!connected||!busy||ansIdx===meIdx())return;conn.send({type:"next"});doNext()};
 })();
 </script>
 </body>
