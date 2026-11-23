@@ -447,6 +447,7 @@ function applySync(d){
   }
   ans=a;hist=h;saveAns();saveHist();renderHist();
   render("✅ 已同步房主的題目紀錄");
+  setTimeout(function(){if(!busy)render()},1000);   /* 顯示一秒後,改回原本的狀態文字 */
 }
 function doSpin(q,pw){
   if(busy||!connected)return;
