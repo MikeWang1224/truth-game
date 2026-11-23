@@ -41,14 +41,6 @@ button:disabled{opacity:.45;cursor:not-allowed}
   <input id="nm" type="text" maxlength="12" placeholder="例如:小明">
   <label for="rm">房間代號(兩人輸入相同代號才會連線,英數字)</label>
   <input id="rm" type="text" maxlength="20" placeholder="例如:love520">
-  <label>題庫(每行一題;目前 <span id="cnt">0</span> 題)<span id="src"></span></label>
-  <textarea id="bank"></textarea>
-  <div>
-    <button class="alt" id="up">上傳 .txt / .csv</button>
-    <button class="alt" id="def">載入內建 100 題</button>
-  </div>
-  <input id="file" type="file" accept=".txt,.csv,text/plain" class="hidden">
-  <div class="small" style="margin-top:8px">題庫只存在你這台裝置,抽到的題目會同步給對方。</div>
   <button id="go">進入遊戲</button>
 </section>
 
@@ -87,20 +79,10 @@ var peer=null,conn=null,isHost=false,connected=false,myName="",oppName="",busy=f
 function save(k,v){try{localStorage.setItem(k,v)}catch(e){}}
 function load(k){try{return localStorage.getItem(k)}catch(e){return null}}
 function parseBank(t){return t.split(/\r?\n/).map(function(s){return s.trim().replace(/^\d+[\.\、\)]\s*/,"").replace(/^["']|["']$/g,"")}).filter(Boolean)}
-function refreshCount(){bank=parseBank($("bank").value);$("cnt").textContent=bank.length}
-var saved=load("tod_bank");
-$("bank").value=saved||DEFAULTS.join("\n");
-refreshCount();
+bank=DEFAULTS.slice();
 fetch("questions.txt",{cache:"no-store"}).then(function(r){if(!r.ok)throw 0;return r.text()}).then(function(t){
-  t=t.replace(/^\uFEFF/,"");
-  if(parseBank(t).length){$("bank").value=t;refreshCount();$("src").textContent="(已從 questions.txt 載入)"}
+  var b=parseBank(t.replace(/^\uFEFF/,""));if(b.length)bank=b;
 }).catch(function(){});
-$("bank").addEventListener("input",function(){refreshCount();save("tod_bank",$("bank").value)});
-$("def").onclick=function(){$("bank").value=DEFAULTS.join("\n");refreshCount();save("tod_bank",$("bank").value)};
-$("up").onclick=function(){$("file").click()};
-$("file").onchange=function(e){var f=e.target.files[0];if(!f)return;var r=new FileReader();
-  r.onload=function(){$("bank").value=String(r.result).replace(/^\uFEFF/,"");refreshCount();save("tod_bank",$("bank").value)};
-  r.readAsText(f,"utf-8")};
 
 function nextQuestion(){
   var pool=bank.length?bank:DEFAULTS;
