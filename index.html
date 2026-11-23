@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>真心話轉盤</title>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<style>
+:root{--bg:#fff7f2;--card:#fff;--ink:#2b2230;--mute:#7a6f80;--a:#ff6b8b;--line:#eadfe6}
+@media (prefers-color-scheme:dark){:root{--bg:#1b1520;--card:#271f2e;--ink:#f4eef7;--mute:#a99db1;--line:#3a2f43}}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font-family:-apple-system,"PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif;min-height:100vh;display:flex;justify-content:center}
+main{width:100%;max-width:480px;padding:20px 16px 40px;box-sizing:border-box}
+h1{text-align:center;font-size:26px;margin:8px 0 18px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:14px}
+label{display:block;font-size:13px;color:var(--mute);margin:10px 0 4px}
+input[type=text],textarea{width:100%;box-sizing:border-box;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--ink);font:inherit}
+textarea{min-height:110px;resize:vertical}
+button{font:inherit;border:0;border-radius:12px;padding:12px 18px;background:var(--a);color:#fff;font-weight:700;cursor:pointer;width:100%;margin-top:12px}
+button.alt{background:transparent;color:var(--ink);border:1px solid var(--line);font-weight:500;width:auto;padding:8px 12px;margin:8px 8px 0 0}
+button:disabled{opacity:.45;cursor:not-allowed}
+.small{font-size:13px;color:var(--mute)}
+.hidden{display:none}
+.wheelwrap{position:relative;width:min(80vw,320px);aspect-ratio:1;margin:10px auto 6px}
+.pointer{position:absolute;left:50%;top:-10px;transform:translateX(-50%);width:0;height:0;border-left:12px solid transparent;border-right:12px solid transparent;border-top:24px solid var(--ink);z-index:2}
+#wheel{width:100%;height:100%;display:block;border-radius:50%;box-shadow:0 6px 24px rgba(0,0,0,.18)}
+.q{font-size:22px;line-height:1.5;text-align:center;padding:10px 4px;font-weight:600}
+.who{text-align:center;font-size:15px;color:var(--mute)}
+.who b{color:var(--ink);font-size:20px}
+.me{color:var(--a)!important}
+.players{display:flex;justify-content:space-between;gap:8px;font-size:14px}
+.players span{padding:4px 10px;border-radius:99px;border:1px solid var(--line)}
+</style>
+</head>
+<body>
+<main>
+<h1>🎡 真心話轉盤</h1>
+
+<section id="setup" class="card">
+  <label for="nm">你的名字(不填就隨機取名)</label>
+  <input id="nm" type="text" maxlength="12" placeholder="例如:小明">
+  <label for="rm">房間代號(兩人輸入相同代號才會連線,英數字)</label>
+  <input id="rm" type="text" maxlength="20" placeholder="例如:love520">
+  <label>題庫(每行一題;目前 <span id="cnt">0</span> 題)</label>
+  <textarea id="bank"></textarea>
+  <div>
+    <button class="alt" id="up">上傳 .txt / .csv</button>
+    <button class="alt" id="def">載入內建 100 題</button>
+  </div>
+  <input id="file" type="file" accept=".txt,.csv,text/plain" class="hidden">
+  <div class="small" style="margin-top:8px">題庫只存在你這台裝置,抽到的題目會同步給對方。</div>
+  <button id="go">進入遊戲</button>
+</section>
+
+<section id="game" class="hidden">
+  <div class="card">
+    <div class="players"><span id="p0">等待中…</span><span id="p1">等待對方…</span></div>
+    <div class="small" id="status" style="text-align:center;margin-top:8px"></div>
+  </div>
+  <div class="wheelwrap">
+    <div class="pointer"></div>
+    <svg id="wheel" viewBox="0 0 200 200">
+      <path d="M100,100 L100,0 A100,100 0 0 1 100,200 Z" fill="#ff6b8b"/>
+      <path d="M100,100 L100,200 A100,100 0 0 1 100,0 Z" fill="#6b8bff"/>
+      <text id="t0" x="150" y="100" fill="#fff" font-size="15" font-weight="700" text-anchor="middle" dominant-baseline="middle" transform="rotate(90 150 100)"></text>
+      <text id="t1" x="50" y="100" fill="#fff" font-size="15" font-weight="700" text-anchor="middle" dominant-baseline="middle" transform="rotate(-90 50 100)"></text>
+    </svg>
+  </div>
+  <button id="spin" disabled>轉!</button>
+  <div id="result" class="card hidden" style="margin-top:14px">
+    <div class="who" id="who"></div>
+    <div class="q" id="question"></div>
+    <div class="small" style="text-align:center">回答完後,由任一方按「下一題」</div>
+    <button id="next">下一題 ➜</button>
+  </div>
+</section>
+</main>
+
+<script>
+(function(){
+var DEFAULTS=["你最近偷偷喜歡的人是誰？", "你最近最常想到誰？", "你手機裡最不想被別人看到的是什麼？", "你做過最丟臉的事是什麼？", "你有沒有假裝沒看到某個人訊息？", "你最近有對誰心動過嗎？", "你最容易被哪種類型的人吸引？", "你曾經為了喜歡的人做過最瘋狂的事？", "你有沒有偷看過別人的社群看很久？", "你最想刪除人生哪一段記憶？", "你曾經喜歡一個人喜歡到什麼程度？", "你有沒有偷偷嫉妒過自己的朋友？", "你最常說但其實不是真的話是什麼？", "你有沒有做過表面開心、內心超不爽的事？", "你最不能接受別人對你做什麼？", "你曾經為了逃避一個人而改變路線嗎？", "你有沒有傳訊息後立刻後悔？", "你曾經偷偷期待某個人找你嗎？", "你最怕別人知道你哪一面？", "你覺得自己最大的缺點是什麼？", "你曾經暗戀一個人多久？", "你喜歡一個人會主動還是等對方？", "你現在有沒有一個不敢說出口的對象？", "你曾經把朋友聊成喜歡的人嗎？", "你有沒有喜歡過不可能在一起的人？", "你最容易因為對方哪個動作心動？", "你曾經因為一個人一句話開心一整天嗎？", "你會因為對方秒回而心動嗎？", "你有沒有故意發限時動態給某個人看？", "你曾經為了等某個人訊息熬夜嗎？", "你最長一次曖昧多久？", "你有沒有把別人當替代品過？", "你曾經喜歡上不該喜歡的人嗎？", "你喜歡被追還是追別人？", "你有沒有明明喜歡卻故意冷淡？", "你曾經因為怕被拒絕而放棄一段感情嗎？", "你有沒有跟不喜歡的人曖昧過？", "你最想跟哪個曾經心動的人重新聊聊？", "如果你喜歡的人現在跟你告白，你會答應嗎？", "你最近一次心動是什麼時候？", "你有沒有偷偷想過復合？", "你忘不了的前任是誰？", "你曾經在分手後偷偷看前任社群嗎？", "你有沒有分手後假裝過得很好？", "你曾經為了留住一個人委屈自己嗎？", "你有沒有說過分手，但其實不想分？", "你曾經在感情裡說謊嗎？為什麼？", "你有沒有一段感情是你自己搞砸的？", "你曾經同時對兩個人有好感嗎？", "你會接受另一半跟前任繼續聯絡嗎？", "你有沒有偷偷查過另一半手機？", "你曾經吃過朋友或另一半的醋，卻不承認嗎？", "你有沒有在分手後後悔自己的決定？", "你覺得自己是渣過別人，還是被渣過？", "你曾經為了不孤單而跟一個人在一起嗎？", "你有沒有曾經不愛了卻不敢提分手？", "你曾經對前任說過最傷人的話是什麼？", "如果前任現在突然找你，你會回覆嗎？", "你有沒有曾經把前任和現任比較？", "你目前最不想遇到的前任是哪一位？", "你對我的第一印象是什麼？", "你曾經對我有過不好的印象嗎？", "你覺得我最吸引人的地方是什麼？", "你覺得我哪個地方最令人受不了？", "你曾經有事情想問我，但一直不敢問嗎？", "你有沒有曾經偷偷觀察我？", "你覺得我有沒有哪個秘密瞞著你？", "你曾經對我說過謊嗎？", "你覺得我們兩個誰比較容易喜歡上別人？", "如果今天之後我們不能再聯絡，你會難過嗎？", "你曾經因為我而吃醋嗎？", "你覺得我最容易被哪種人追走？", "你有沒有曾經想跟我說一件很認真的事，最後卻開玩笑帶過？", "你覺得我在你心裡算什麼位置？", "你有沒有曾經想過跟我一起做某件事，但沒說出口？", "你覺得我們有可能發展成另一種關係嗎？", "你最想知道我哪一個秘密？", "你覺得我有哪件事其實一直誤會你？", "如果要對我坦白一件事，你會說什麼？", "你覺得我們兩個現在的關係，是你真正想要的嗎？", "你現在心裡有沒有一個放不下的人？", "如果可以跟一個人接吻，你會選誰？", "你曾經對朋友產生過超越友情的感情嗎？", "你有沒有喜歡過現在不適合喜歡的人？", "你曾經為了某個人哭到睡著嗎？", "你有沒有一個永遠不會告訴別人的秘密？", "你曾經做過最對不起別人的事是什麼？", "你現在最遺憾的一段關係是什麼？", "你有沒有想過跟某個人如果當初在一起，現在會怎樣？", "你最怕失去現在生命中的哪一個人？", "你曾經嘴上說放下，心裡卻完全沒有嗎？", "你有沒有一個人，只要看到名字就會心情改變？", "你有沒有曾經故意讓喜歡的人吃醋？", "你最想回到人生哪一天？", "如果今天必須對一個人告白，你會選誰？", "你最不敢承認的感情是什麼？", "如果你知道告白一定會失敗，你還會告白嗎？", "你有沒有曾經對某個人產生不該有的幻想？", "今天這100題裡，哪一題你最不想回答？為什麼？", "現在坐在你面前的這個人，有沒有哪一刻讓你心動過？"];
+var NAMES=["小橘貓","大白鯊","奶茶控","芒果冰","夜貓子","小熊餅乾","月亮兔","柴犬君","泡麵王","星星糖"];
+var $=function(i){return document.getElementById(i)};
+var bank=[],used=[];
+var peer=null,conn=null,isHost=false,connected=false,myName="",oppName="",busy=false,rot=0,timer=null,hostId="";
+
+function save(k,v){try{localStorage.setItem(k,v)}catch(e){}}
+function load(k){try{return localStorage.getItem(k)}catch(e){return null}}
+function parseBank(t){return t.split(/\r?\n/).map(function(s){return s.trim().replace(/^\d+[\.\、\)]\s*/,"").replace(/^["']|["']$/g,"")}).filter(Boolean)}
+function refreshCount(){bank=parseBank($("bank").value);$("cnt").textContent=bank.length}
+var saved=load("tod_bank");
+$("bank").value=saved||DEFAULTS.join("\n");
+refreshCount();
+$("bank").addEventListener("input",function(){refreshCount();save("tod_bank",$("bank").value)});
+$("def").onclick=function(){$("bank").value=DEFAULTS.join("\n");refreshCount();save("tod_bank",$("bank").value)};
+$("up").onclick=function(){$("file").click()};
+$("file").onchange=function(e){var f=e.target.files[0];if(!f)return;var r=new FileReader();
+  r.onload=function(){$("bank").value=String(r.result).replace(/^\uFEFF/,"");refreshCount();save("tod_bank",$("bank").value)};
+  r.readAsText(f,"utf-8")};
+
+function nextQuestion(){
+  var pool=bank.length?bank:DEFAULTS;
+  var left=pool.filter(function(q){return used.indexOf(q)<0});
+  if(!left.length){used=[];left=pool.slice()}
+  var q=left[Math.floor(Math.random()*left.length)];used.push(q);return q;
+}
+function short(n){return n.length>6?n.slice(0,6)+"…":n}
+function names(){return isHost?[myName,oppName]:[oppName,myName]}
+function meIdx(){return isHost?0:1}
+function render(msg){
+  var n=names(),me=meIdx();
+  $("p0").textContent=n[0]?n[0]+(me===0?"(你)":""):"等待對方…";
+  $("p1").textContent=n[1]?n[1]+(me===1?"(你)":""):"等待對方…";
+  $("t0").textContent=short(n[0]);$("t1").textContent=short(n[1]);
+  $("spin").disabled=!(connected&&!busy);
+  if(msg)$("status").textContent=msg;
+  else if(!busy)$("status").textContent=connected?"兩人到齊,任何一方都可以按「轉!」":"等待對方加入…(請對方輸入相同房間代號)";
+}
+
+function start(){
+  myName=$("nm").value.trim()||NAMES[Math.floor(Math.random()*NAMES.length)]+Math.floor(Math.random()*90+10);
+  var code=($("rm").value.trim()||"default").toLowerCase().replace(/[^a-z0-9]/g,"")||"default";
+  hostId="tod-"+code+"-host";
+  $("setup").classList.add("hidden");$("game").classList.remove("hidden");
+  render("連線中…");
+  if(typeof Peer==="undefined"){render("⚠️ 無法載入連線元件,請檢查網路");return}
+  becomeHost();
+}
+function becomeHost(){
+  peer=new Peer(hostId);
+  peer.on("open",function(){isHost=true;render()});
+  peer.on("connection",function(c){if(conn&&connected){c.close();return}setup(c)});
+  peer.on("error",function(e){
+    if(e.type==="unavailable-id"){try{peer.destroy()}catch(x){}becomeGuest()}
+    else render("⚠️ 連線錯誤:"+e.type);
+  });
+}
+function becomeGuest(){
+  isHost=false;
+  peer=new Peer();
+  peer.on("open",function(){setup(peer.connect(hostId,{reliable:true}))});
+  peer.on("error",function(e){render(e.type==="peer-unavailable"?"⚠️ 找不到房間,請對方重新進入":"⚠️ 連線錯誤:"+e.type)});
+}
+function setup(c){
+  conn=c;
+  var opened=function(){connected=true;c.send({type:"hello",name:myName});render()};
+  c.on("open",opened);if(c.open)opened();
+  c.on("data",onData);
+  c.on("close",function(){connected=false;oppName="";busy=false;clearTimeout(timer);$("result").classList.add("hidden");render("對方已離線,等待重新連線…");if(!isHost){isHost=false}});
+  c.on("error",function(){render("⚠️ 連線中斷")});
+}
+function onData(d){
+  if(!d||typeof d!=="object")return;
+  if(d.type==="hello"){oppName=String(d.name||"對方").slice(0,12);render()}
+  else if(d.type==="req"&&isHost){doSpin(typeof d.q==="string"?d.q:nextQuestion())}
+  else if(d.type==="spin"&&!isHost){runSpin(d)}
+  else if(d.type==="next"){doNext()}
+}
+function doSpin(q){
+  if(busy||!connected)return;
+  var d={type:"spin",t:Math.random()<.5?0:1,off:20+Math.random()*140,turns:5+Math.floor(Math.random()*3),q:q};
+  conn.send(d);runSpin(d);
+}
+function runSpin(d){
+  if(busy)return;
+  var t=d.t===1?1:0,off=Math.max(15,Math.min(165,Number(d.off)||90)),turns=Math.max(4,Math.min(8,Number(d.turns)||5));
+  var q=typeof d.q==="string"?d.q.slice(0,300):"(空白題目)";
+  busy=true;$("spin").disabled=true;$("result").classList.add("hidden");$("status").textContent="轉動中…";
+  var cur=rot-(((rot%360)+360)%360);
+  rot=cur+360*turns-(t*180+off);
+  var w=$("wheel");w.style.transition="transform 4.6s cubic-bezier(.12,.7,.1,1)";w.style.transform="rotate("+rot+"deg)";
+  clearTimeout(timer);
+  timer=setTimeout(function(){
+    var mine=(t===meIdx()),nm=names()[t]||"?";
+    var who=$("who");who.textContent="";
+    var a=document.createElement("span");a.textContent="輪到 ";
+    var b=document.createElement("b");b.textContent=nm;if(mine)b.className="me";
+    var c=document.createElement("span");c.textContent=mine?" 回答!(就是你)":" 回答!";
+    who.appendChild(a);who.appendChild(b);who.appendChild(c);
+    $("question").textContent=q;$("result").classList.remove("hidden");$("status").textContent="";
+  },4700);
+}
+function doNext(){
+  if(!busy)return;
+  clearTimeout(timer);busy=false;$("result").classList.add("hidden");render();
+}
+$("go").onclick=start;
+$("spin").onclick=function(){
+  if(!connected||busy)return;
+  var q=nextQuestion();
+  if(isHost)doSpin(q);else{conn.send({type:"req",q:q});$("spin").disabled=true;setTimeout(function(){if(!busy)render()},3000)}
+};
+$("next").onclick=function(){if(connected)conn.send({type:"next"});doNext()};
+})();
+</script>
+</body>
+</html>
