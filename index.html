@@ -36,7 +36,7 @@ button:disabled{opacity:.45;cursor:not-allowed}
 <body>
 <main>
 <h1>🎡 真心話轉盤</h1>
-<div class="small" style="text-align:center;margin:-10px 0 14px">版本 v4(同步清除)</div>
+<div class="small" style="text-align:center;margin:-10px 0 14px">歡迎來到真心話時間,今晚誠實一點 🤫</div>
 
 <section id="setup" class="card">
   <label for="nm">你的名字(不填就隨機取名)</label>
@@ -70,6 +70,7 @@ button:disabled{opacity:.45;cursor:not-allowed}
   <div style="margin-top:6px">
     <button class="alt" id="hbtn">📖 歷史紀錄(0)</button>
     <button class="alt" id="hclr">清除記憶</button>
+    <button class="alt" id="snd">🔊 音效開</button>
   </div>
   <div id="hist" class="card hidden small" style="margin-top:8px"></div>
 </section>
@@ -107,6 +108,25 @@ fetch("questions.txt",{cache:"no-store"}).then(function(r){if(!r.ok)throw 0;retu
   var b=parseBank(t.replace(/^\uFEFF/,""));if(b.length)bank=b;
 }).catch(function(){});
 
+var actx=null,muted=load("tod_mute")==="1";
+function audio(){try{if(!actx){var C=window.AudioContext||window.webkitAudioContext;if(C)actx=new C()}if(actx&&actx.state==="suspended")actx.resume()}catch(e){}return actx}
+function beep(t,f,dur,vol,type){var o=actx.createOscillator(),g=actx.createGain();o.type=type||"square";o.frequency.value=f;g.gain.setValueAtTime(vol,t);g.gain.exponentialRampToValueAtTime(0.0001,t+dur);o.connect(g);g.connect(actx.destination);o.start(t);o.stop(t+dur+0.02)}
+function bez(p,a,b){var u=1-p;return 3*u*u*p*a+3*u*p*p*b+p*p*p}
+function playSpin(angle,dur){
+  if(muted)return;var c=audio();if(!c)return;
+  try{
+    var t0=c.currentTime+0.05,peg=36,n=Math.floor(angle/peg),last=-1;
+    for(var k=1;k<=n;k++){
+      var y=k*peg/angle,lo=0,hi=1;
+      for(var i=0;i<24;i++){var m=(lo+hi)/2;if(bez(m,.7,1)<y)lo=m;else hi=m}
+      var tt=bez((lo+hi)/2,.12,.1)*dur;
+      if(tt-last<0.025)continue;last=tt;
+      beep(t0+tt,900+(k%2)*120,0.03,0.07,"square");
+    }
+    beep(t0+dur+0.05,880,0.5,0.2,"sine");beep(t0+dur+0.05,1320,0.6,0.12,"sine");
+  }catch(e){}
+}
+function renderSnd(){$("snd").textContent=muted?"🔇 音效關":"🔊 音效開"}
 var roomCode="default",hist=[];
 function saveUsed(){save("tod_used_"+roomCode,JSON.stringify(used))}
 function saveHist(){save("tod_hist_"+roomCode,JSON.stringify(hist))}
@@ -148,6 +168,7 @@ function render(msg){
 }
 
 function start(){
+  audio();
   myName=$("nm").value.trim()||NAMES[Math.floor(Math.random()*NAMES.length)]+Math.floor(Math.random()*90+10);
   var code=($("rm").value.trim()||"default").toLowerCase().replace(/[^a-z0-9]/g,"")||"default";
   hostId="tod-"+code+"-host";
@@ -199,9 +220,11 @@ function runSpin(d){
   var q=typeof d.q==="string"?d.q.slice(0,300):"(空白題目)";
   if(used.indexOf(q)<0){used.push(q);saveUsed()}
   busy=true;$("spin").disabled=true;$("result").classList.add("hidden");$("status").textContent="轉動中…";
+  var prev=rot;
   var cur=rot-(((rot%360)+360)%360);
   rot=cur+360*turns-(t*180+off);
   var w=$("wheel");w.style.transition="transform 4.6s cubic-bezier(.12,.7,.1,1)";w.style.transform="rotate("+rot+"deg)";
+  playSpin(rot-prev,4.6);
   clearTimeout(timer);
   timer=setTimeout(function(){
     var mine=(t===meIdx()),nm=names()[t]||"?";
@@ -219,6 +242,8 @@ function doNext(){
   clearTimeout(timer);busy=false;$("result").classList.add("hidden");render();
 }
 $("nm").value=load("tod_name")||"";$("rm").value=load("tod_room")||"";
+$("snd").onclick=function(){muted=!muted;save("tod_mute",muted?"1":"0");renderSnd();audio()};
+renderSnd();
 $("hbtn").onclick=function(){$("hist").classList.toggle("hidden")};
 function clearMem(){used=[];hist=[];saveUsed();saveHist();renderHist()}
 $("hclr").onclick=function(){
