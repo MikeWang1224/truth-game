@@ -338,14 +338,31 @@ function becomeGuest(){
   isHost=false;
   peer=new Peer(undefined,PEER_OPTS);
   peer.on("open",function(){setup(peer.connect(hostId,{reliable:true}))});
-  peer.on("error",function(e){render(e.type==="peer-unavailable"?"⚠️ 找不到房間,請對方重新進入":"⚠️ 連線錯誤:"+e.type)});
+  peer.on("error",function(e){
+    if(e.type==="peer-unavailable"){render("房主不在,正在重新嘗試…");rejoin(2000)}
+    else render("⚠️ 連線錯誤:"+e.type);
+  });
+}
+var rejoinTimer=null;
+function rejoin(ms){
+  clearTimeout(rejoinTimer);
+  rejoinTimer=setTimeout(function(){
+    var old=peer;peer=null;conn=null;connected=false;
+    try{if(old)old.destroy()}catch(x){}
+    becomeHost();
+  },ms||0);
 }
 function setup(c){
   conn=c;
   var opened=function(){connected=true;c.send({type:"hello",name:myName});render()};
   c.on("open",opened);if(c.open)opened();
   c.on("data",onData);
-  c.on("close",function(){connected=false;oppName="";busy=false;clearTimeout(timer);$("result").classList.add("hidden");render("對方已離線,等待重新連線…");if(!isHost){isHost=false}});
+  c.on("close",function(){
+    if(c!==conn)return;
+    connected=false;oppName="";busy=false;clearTimeout(timer);$("result").classList.add("hidden");
+    if(isHost)render("對方已離線,等待重新連線…");
+    else{render("房主已離開,正在接手房間…");rejoin(300)}
+  });
   c.on("error",function(){render("⚠️ 連線中斷(兩邊網路可能無法直連,需設定 TURN)")});
 }
 function onData(d){
