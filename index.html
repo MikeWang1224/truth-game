@@ -149,8 +149,9 @@ html[data-phase="night"][data-wx="rain"]{--tint:rgba(15,20,45,.35)}
 html[data-phase="night"][data-wx="storm"]{--tint:rgba(5,5,20,.45)}
 html[data-phase="night"][data-wx="fog"]{--tint:rgba(120,130,160,.25)}
 html[data-phase="night"][data-wx="snow"]{--tint:rgba(150,165,200,.2)}
-#skyfx{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden;opacity:0;transition:opacity 1.2s}
-html[data-sky] #skyfx{opacity:1}
+#skyfx{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden;display:none}   /* 關閉時整層不渲染,底下所有動畫跟著停止,不耗電 */
+html[data-sky] #skyfx{display:block;animation:skyin 1.2s ease both}
+@keyframes skyin{from{opacity:0}to{opacity:1}}
 .sx-tint,.sx-sun,.sx-moon,.sx-stars,.sx-cld,.sx-fog,.sx-rain,.sx-snow,.sx-flash{position:absolute;opacity:0;transition:opacity 1.5s}
 .sx-tint{inset:0;background:var(--tint)}
 html[data-sky] .sx-tint{opacity:1}
@@ -200,6 +201,13 @@ html[data-wx="fog"] .sx-fog{opacity:1}
 .sx-flash{inset:0;background:rgba(255,255,255,.85);display:none}
 html[data-wx="storm"] .sx-flash{display:block;animation:flash 8s infinite}
 @keyframes flash{0%,91%,100%{opacity:0}92%{opacity:.55}93%{opacity:.05}94%{opacity:.4}96%{opacity:0}}
+/* 開啟中,但目前天氣用不到的圖層:動畫暫停(看不見也在跑會白白耗電) */
+html:not([data-wx="rain"]):not([data-wx="storm"]) .sx-rain::before,html:not([data-wx="rain"]):not([data-wx="storm"]) .sx-rain::after,
+html:not([data-wx="snow"]) .sx-snow::before,html:not([data-wx="snow"]) .sx-snow::after,
+html:not([data-wx="fog"]) .sx-fog::before,html:not([data-wx="fog"]) .sx-fog::after,
+html[data-wx="clear"] .sx-cld,html[data-wx="partly"] .sx-c3,html[data-wx="partly"] .sx-c4,
+html:not([data-phase="night"]) .sx-stars::after,
+html[data-wx="rain"] .sx-stars::after,html[data-wx="storm"] .sx-stars::after,html[data-wx="snow"] .sx-stars::after,html[data-wx="fog"] .sx-stars::after{animation-play-state:paused}
 /* iOS 26 Safari 不再看 theme-color,改成取畫面最上/最下緣「固定定位」元素的 background-color 來上色狀態列與底部工具列。
    這兩條是看不見的取色條(用遮罩隱形),顏色永遠跟著頁面背景變數走,讓上下兩條系統列和頁面同色 */
 .edge{position:fixed;left:0;right:0;height:24px;z-index:5;pointer-events:none;-webkit-mask-image:linear-gradient(transparent,transparent);mask-image:linear-gradient(transparent,transparent)}
@@ -763,7 +771,7 @@ function describe(){
 }
 function say(text,ms){
   tip.textContent=text;tip.classList.add("show");
-  clearTimeout(tipT);tipT=setTimeout(function(){tip.classList.remove("show")},ms||3000);
+  clearTimeout(tipT);tipT=setTimeout(function(){tip.classList.remove("show")},ms||1000);
 }
 /* Safari 26 對「整個畫面大小的固定圖層」會一直沿用第一次取到的顏色,所以背景換色後,上下系統列會卡在舊顏色。
    解法:換色的瞬間把這些圖層暫時隱藏約 0.1 秒,讓 Safari 忘掉舊顏色、重新取樣 */
@@ -854,14 +862,14 @@ function refresh(force){
     if(!(info&&info.ok))info={ok:false,kind:"clear",sr:0,ss:0,why:(e&&e.why)||"抓不到天氣",denied:!!(e&&e.denied)};
   }).then(function(){
     busy=false;saveCache();apply();
-    if(pend){pend=false;if(on)say("跟隨當地:"+describe(),3500)}
+    if(pend){pend=false;if(on)say("跟隨當地:"+describe())}
     if(fromCache&&!recheck){recheck=true;relocate()}
   });
 }
 function toggle(){
   on=!on;ls(KEY,on?"1":"0");apply();
   if(!on){say("已關閉,使用預設背景");return}
-  if(info&&(info.ok||info.denied)){say("跟隨當地:"+describe(),3500);return}
+  if(info&&(info.ok||info.denied)){say("跟隨當地:"+describe());return}
   say("正在取得當地天氣…",8000);pend=true;
   if(!busy)refresh(true);
 }
