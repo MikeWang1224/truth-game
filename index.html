@@ -200,6 +200,11 @@ html[data-wx="fog"] .sx-fog{opacity:1}
 .sx-flash{inset:0;background:rgba(255,255,255,.85);display:none}
 html[data-wx="storm"] .sx-flash{display:block;animation:flash 8s infinite}
 @keyframes flash{0%,91%,100%{opacity:0}92%{opacity:.55}93%{opacity:.05}94%{opacity:.4}96%{opacity:0}}
+/* iOS 26 Safari 不再看 theme-color,改成取畫面最上/最下緣「固定定位」元素的 background-color 來上色狀態列與底部工具列。
+   這兩條是看不見的取色條(用遮罩隱形),顏色永遠跟著頁面背景變數走,讓上下兩條系統列和頁面同色 */
+.edge{position:fixed;left:0;right:0;height:24px;z-index:5;pointer-events:none;-webkit-mask-image:linear-gradient(transparent,transparent);mask-image:linear-gradient(transparent,transparent)}
+.edge-t{top:0;background-color:var(--bg1)}
+.edge-b{bottom:0;background-color:var(--bg2)}
 #skybtn{position:fixed;top:max(10px,env(safe-area-inset-top));right:max(12px,env(safe-area-inset-right));z-index:30;width:42px;height:42px;padding:0;margin:0;border-radius:50%;border:1px solid var(--line);background:var(--card);color:var(--ink);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:var(--shadow);display:grid;place-items:center;letter-spacing:0}
 #skybtn svg{width:26px;height:26px;display:block}
 #skybtn .sun circle{fill:#ffb02e;stroke:#ff8a1f;stroke-width:1.2}
@@ -249,6 +254,7 @@ html[data-wx="storm"] .sx-flash{display:block;animation:flash 8s infinite}
 </svg>
 </div>
 <div id="skyfx" aria-hidden="true"><div class="sx-tint"></div><div class="sx-sun"></div><div class="sx-moon"></div><div class="sx-stars"></div><div class="sx-cld sx-c1"></div><div class="sx-cld sx-c2"></div><div class="sx-cld sx-c3"></div><div class="sx-cld sx-c4"></div><div class="sx-fog"></div><div class="sx-rain"></div><div class="sx-snow"></div><div class="sx-flash"></div></div>
+<div class="edge edge-t" aria-hidden="true"></div><div class="edge edge-b" aria-hidden="true"></div>
 <button id="skybtn" type="button" aria-pressed="false" aria-label="背景跟隨當地天氣" title="背景:預設(點一下改成跟隨當地天氣與時間)"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><defs><mask id="skycut" maskUnits="userSpaceOnUse" x="0" y="0" width="24" height="24"><rect width="24" height="24" fill="#fff"/><line x1="4.5" y1="4.5" x2="19.5" y2="19.5" stroke="#000" stroke-width="4.6" stroke-linecap="round"/></mask></defs><g class="sun" mask="url(#skycut)"><circle cx="12" cy="12" r="4.6"/><path d="M12 2.5v2.6M12 18.9v2.6M2.5 12h2.6M18.9 12h2.6M5.3 5.3l1.9 1.9M16.8 16.8l1.9 1.9M18.7 5.3l-1.9 1.9M7.2 16.8l-1.9 1.9"/></g><line class="slash" x1="4.5" y1="4.5" x2="19.5" y2="19.5"/></svg></button>
 <div id="skytip" role="status" aria-live="polite"></div>
 <main>
@@ -725,6 +731,9 @@ $("next").onclick=function(){if(!connected||!busy||ansIdx===meIdx())return;conn.
 <script>
 (function(){
 var html=document.documentElement,btn=document.getElementById("skybtn"),tip=document.getElementById("skytip");
+var bgEl=document.querySelector(".bg"),fxEl=document.getElementById("skyfx"),edgeEls=[].slice.call(document.querySelectorAll(".edge")),rsT=0,lastKey="";
+var metas=[].slice.call(document.querySelectorAll('meta[name="theme-color"]'));
+metas.forEach(function(m){m.setAttribute("data-orig",m.getAttribute("content")||"")});
 var KEY="tod_sky",CK="tod_sky_cache",on=false,info=null,pos=null,fetchedAt=0,failAt=0,tipT=0,busy=false,pend=false,recheck=false;
 var WXN={clear:"晴天",partly:"多雲時晴",cloudy:"陰天",fog:"起霧",rain:"下雨",snow:"下雪",storm:"雷雨"};
 var PHN={dawn:"日出",day:"白天",dusk:"黃昏",night:"夜晚"};
@@ -756,16 +765,34 @@ function say(text,ms){
   tip.textContent=text;tip.classList.add("show");
   clearTimeout(tipT);tipT=setTimeout(function(){tip.classList.remove("show")},ms||3000);
 }
+/* Safari 26 對「整個畫面大小的固定圖層」會一直沿用第一次取到的顏色,所以背景換色後,上下系統列會卡在舊顏色。
+   解法:換色的瞬間把這些圖層暫時隱藏約 0.1 秒,讓 Safari 忘掉舊顏色、重新取樣 */
+function resample(){
+  var els=[bgEl,fxEl].concat(edgeEls);
+  els.forEach(function(e){if(e)e.style.display="none"});
+  void document.body.offsetHeight;
+  clearTimeout(rsT);
+  rsT=setTimeout(function(){els.forEach(function(e){if(e)e.style.display=""})},100);
+}
+function syncBars(){
+  var c=on?getComputedStyle(html).getPropertyValue("--bg1").trim():"";
+  metas.forEach(function(m){m.setAttribute("content",c||m.getAttribute("data-orig"))});   /* Android Chrome 與舊版 Safari 仍看 theme-color */
+  var key=on?html.getAttribute("data-phase"):"off";
+  if(lastKey&&key!==lastKey)resample();
+  lastKey=key;
+}
 function apply(){
   if(!on){
     html.removeAttribute("data-sky");html.removeAttribute("data-phase");html.removeAttribute("data-wx");
     btn.setAttribute("aria-pressed","false");btn.title="背景:預設(點一下改成跟隨當地天氣與時間)";
+    syncBars();
     return;
   }
   html.setAttribute("data-sky","1");
   html.setAttribute("data-phase",phase());
   html.setAttribute("data-wx",info&&info.ok?info.kind:"clear");
   btn.setAttribute("aria-pressed","true");btn.title="背景:跟隨當地("+describe()+"),點一下關閉";
+  syncBars();
 }
 /* 快取:座標永久記著(下次不用再等定位),天氣記 3 小時內有效 */
 function loadCache(){
@@ -843,6 +870,7 @@ setInterval(function(){if(on)apply();refresh(false)},60000);
 document.addEventListener("visibilitychange",function(){if(!document.hidden){if(on)apply();refresh(false)}});
 /* 一進頁面就先取天氣(不用等按開關);有快取的話畫面立刻就有 */
 loadCache();on=(ls(KEY)==="1");apply();refresh(false);
+if(on)window.addEventListener("load",function(){setTimeout(resample,300)});
 })();
 </script>
 </body>
