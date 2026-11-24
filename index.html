@@ -65,6 +65,7 @@ button:hover{transform:translateY(-1px)}button:active{transform:translateY(1px) 
 button:focus-visible{outline:3px solid rgba(255,106,150,.5);outline-offset:3px}
 button.alt{background:var(--card);color:var(--ink);border:1px solid var(--line);box-shadow:none;font-weight:600;font-size:13px;letter-spacing:0;width:auto;padding:9px 14px;margin:0}
 button:disabled{opacity:.45;cursor:not-allowed;transform:none}
+#next:disabled{background:#c9c9d3;box-shadow:none;opacity:1;color:#fff}
 #spin{font-size:20px;padding:16px;margin-top:20px;background:linear-gradient(135deg,#ff86ab,#ff5c8a);box-shadow:0 0 0 6px rgba(255,255,255,.5),0 12px 26px rgba(255,92,138,.38)}
 @media (prefers-color-scheme:dark){#spin{box-shadow:0 0 0 6px rgba(255,255,255,.08),0 12px 26px rgba(255,92,138,.3)}}
 .small{font-size:13px;color:var(--mute)}
@@ -297,7 +298,7 @@ html[data-phase="night"] .bg .fw g.s3 circle{fill:#ffd98a;filter:drop-shadow(0 0
   <div id="result" class="card result hidden">
     <div class="who" id="who"></div>
     <div class="q" id="question"></div>
-    <div class="small">回答完後,由任一方按「下一題」</div>
+    <div class="small" id="hint">回答完後,由另一方按「下一題」</div>
     <button id="next">下一題 ➜</button>
   </div>
 
@@ -332,8 +333,12 @@ if(TURN_USER&&TURN_CRED){
 var PEER_OPTS={config:{iceServers:ICE}};
 var NAMES=["小橘貓","大白鯊","奶茶控","芒果冰","夜貓子","小熊餅乾","月亮兔","柴犬君","泡麵王","星星糖"];
 var $=function(i){return document.getElementById(i)};
-var bank=[],used=[];
-var peer=null,conn=null,isHost=false,connected=false,myName="",oppName="",busy=false,rot=0,timer=null,hostId="";
+var bank=[],ans={};
+/* ans:每題誰答過(從這台裝置的角度) 1=我答過 2=對方答過 3=兩人都答過
+   規則:題目可以重複抽,但同一題每個人最多答一次;答過的人不會再被轉到,兩人都答過的題目就不再使用。
+   想讓「全新的題目」優先出現(用完才輪到重複的),把下面改成 true */
+var PREFER_FRESH=false;
+var peer=null,conn=null,isHost=false,connected=false,myName="",oppName="",busy=false,rot=0,timer=null,hostId="",ansIdx=-1,spinner=-1;
 
 function save(k,v){try{localStorage.setItem(k,v)}catch(e){}}
 function load(k){try{return localStorage.getItem(k)}catch(e){return null}}
@@ -347,14 +352,15 @@ var actx=null,muted=load("tod_mute")==="1";
 function audio(){try{if(!actx){var C=window.AudioContext||window.webkitAudioContext;if(C)actx=new C()}if(actx&&actx.state==="suspended")actx.resume()}catch(e){}return actx}
 function beep(t,f,dur,vol,type){var o=actx.createOscillator(),g=actx.createGain();o.type=type||"square";o.frequency.value=f;g.gain.setValueAtTime(vol,t);g.gain.exponentialRampToValueAtTime(0.0001,t+dur);o.connect(g);g.connect(actx.destination);o.start(t);o.stop(t+dur+0.02)}
 function bez(p,a,b){var u=1-p;return 3*u*u*p*a+3*u*p*p*b+p*p*p}
-function playSpin(angle,dur){
+function playSpin(angle,dur,e){
+  e=e||[.22,.61,.36,1];
   if(muted)return;var c=audio();if(!c)return;
   try{
     var t0=c.currentTime+0.05,peg=36,n=Math.floor(angle/peg),last=-1;
     for(var k=1;k<=n;k++){
       var y=k*peg/angle,lo=0,hi=1;
-      for(var i=0;i<24;i++){var m=(lo+hi)/2;if(bez(m,.61,1)<y)lo=m;else hi=m}
-      var tt=bez((lo+hi)/2,.22,.36)*dur;
+      for(var i=0;i<24;i++){var m=(lo+hi)/2;if(bez(m,e[1],e[3])<y)lo=m;else hi=m}
+      var tt=bez((lo+hi)/2,e[0],e[2])*dur;
       if(tt-last<0.02)continue;last=tt;
       beep(t0+tt,900+(k%2)*120,0.03,0.07,"square");
     }
@@ -363,7 +369,7 @@ function playSpin(angle,dur){
 }
 function renderSnd(){$("snd").textContent=muted?"🔇 音效關":"🔊 音效開"}
 var roomCode="default",hist=[];
-function saveUsed(){save("tod_used_"+roomCode,JSON.stringify(used))}
+function saveAns(){save("tod_ans_"+roomCode,JSON.stringify(ans))}
 function saveHist(){save("tod_hist_"+roomCode,JSON.stringify(hist))}
 function renderHist(){
   $("hbtn").textContent="📖 歷史紀錄("+hist.length+")";
@@ -377,17 +383,18 @@ function renderHist(){
   });
 }
 function loadMem(){
-  try{used=JSON.parse(load("tod_used_"+roomCode)||"[]")}catch(e){used=[]}
+  try{ans=JSON.parse(load("tod_ans_"+roomCode)||"{}")}catch(e){ans={}}
   try{hist=JSON.parse(load("tod_hist_"+roomCode)||"[]")}catch(e){hist=[]}
-  if(!Array.isArray(used))used=[];if(!Array.isArray(hist))hist=[];
+  if(!ans||typeof ans!=="object"||Array.isArray(ans))ans={};if(!Array.isArray(hist))hist=[];
   renderHist();
 }
 function addHist(q,nm){hist.push({q:q,n:nm,ts:Date.now()});if(hist.length>300)hist=hist.slice(-300);saveHist();renderHist()}
 function nextQuestion(){
   var pool=bank.length?bank:DEFAULTS;
-  var left=pool.filter(function(q){return used.indexOf(q)<0});
-  if(!left.length){used=[];saveUsed();left=pool.slice()}
-  var q=left[Math.floor(Math.random()*left.length)];return q;
+  var ok=pool.filter(function(q){return (ans[q]||0)!==3});      /* 兩人都答過的題目不再使用 */
+  if(!ok.length){ans={};saveAns();ok=pool.slice()}               /* 全部題目兩人都答完了才重新開始 */
+  if(PREFER_FRESH){var fresh=ok.filter(function(q){return !ans[q]});if(fresh.length)ok=fresh}
+  return ok[Math.floor(rnd()*ok.length)];
 }
 function randCode(){
   var A="abcdefghjkmnpqrstuvwxyz23456789",o="",r=null;
@@ -399,14 +406,22 @@ function hashStr(s){var h=5381;for(var i=0;i<s.length;i++)h=((h<<5)+h+s.charCode
 function short(n){return n.length>6?n.slice(0,6)+"…":n}
 function names(){return isHost?[myName,oppName]:[oppName,myName]}
 function meIdx(){return isHost?0:1}
+function canSpin(){return spinner===-1||spinner===meIdx()}
+function spinLabel(){
+  if(!connected)return "轉!";
+  if(busy)return "進行中…";
+  if(!canSpin())return "⏳ 等 "+short(oppName||"對方")+" 轉盤";
+  return spinner===meIdx()?"🎯 換你轉!":"轉!";
+}
 function render(msg){
   var n=names(),me=meIdx();
   $("p0").textContent=n[0]?n[0]+(me===0?"(你)":""):"等待對方…";
   $("p1").textContent=n[1]?n[1]+(me===1?"(你)":""):"等待對方…";
   $("t0").textContent=short(n[0]);$("t1").textContent=short(n[1]);
-  $("spin").disabled=!(connected&&!busy);
+  $("spin").disabled=!(connected&&!busy&&canSpin());
+  if(!ch&&!watch)$("spin").textContent=spinLabel();
   if(msg)$("status").textContent=msg;
-  else if(!busy)$("status").textContent=connected?"兩人到齊,按住「轉!」蓄力,放開就轉(越久越快,有上限)":"等待對方加入…(請對方輸入相同房間代號)";
+  else if(!busy)$("status").textContent=!connected?"等待對方加入…(請對方輸入相同房間代號)":(spinner===-1?"兩人到齊,按住「轉!」蓄力,放開就轉(越久越快,有上限)":(canSpin()?"換你轉!按住按鈕蓄力,放開就轉":"等 "+(oppName||"對方")+" 轉盤…"));
 }
 
 function start(){
@@ -451,7 +466,7 @@ function rejoin(ms){
 }
 function onLinkClosed(c){
   if(c!==conn)return;
-  connected=false;oppName="";busy=false;clearTimeout(timer);clearTimeout(pingTimer);$("result").classList.add("hidden");
+  stopWatch();connected=false;oppName="";busy=false;ansIdx=-1;spinner=-1;clearTimeout(timer);clearTimeout(pingTimer);$("result").classList.add("hidden");
   if(isHost)render("對方已離線,等待重新連線…");
   else{render("房主已離開,正在接手房間…");rejoin(300)}
 }
@@ -483,7 +498,7 @@ window.addEventListener("pageshow",function(e){if(e.persisted&&peer){wakeOn();ch
 window.addEventListener("online",function(){if(peer)checkLink()});
 function setup(c){
   conn=c;
-  var opened=function(){connected=true;c.send({type:"hello",name:myName});render()};
+  var opened=function(){connected=true;c.send({type:"hello",name:myName});if(isHost)c.send({type:"sync",ans:ans,hist:hist});render()};
   c.on("open",opened);if(c.open)opened();
   c.on("data",onData);
   c.on("close",function(){onLinkClosed(c)});
@@ -492,31 +507,63 @@ function setup(c){
 function onData(d){
   if(!d||typeof d!=="object")return;
   if(d.type==="hello"){oppName=String(d.name||"對方").slice(0,12);render()}
-  else if(d.type==="req"&&isHost){doSpin(typeof d.q==="string"?d.q:nextQuestion(),d.pw)}
+  else if(d.type==="req"&&isHost&&(spinner===-1||spinner===1)){doSpin(null,d.pw)}
   else if(d.type==="spin"&&!isHost){runSpin(d)}
-  else if(d.type==="next"){doNext()}
+  else if(d.type==="next"){if(ansIdx===1-meIdx())return;doNext()}
+  else if(d.type==="sync"&&!isHost){applySync(d)}
+  else if(d.type==="charge"){if(d.on===true)startWatch();else stopWatch()}
   else if(d.type==="clear"){clearMem();$("status").textContent="對方已清除記憶"}
   else if(d.type==="ping"){try{conn.send({type:"pong"})}catch(e){}}
   else if(d.type==="pong"){clearTimeout(pingTimer)}
 }
+function rnd(){try{var a=new Uint32Array(1);crypto.getRandomValues(a);return a[0]/4294967296}catch(e){return Math.random()}}
+var EASES=[[.22,.61,.36,1],[.16,.72,.2,1],[.3,.5,.3,1]];
+/* 連線成功時,房主把自己的紀錄整份傳給對方,對方直接以房主的為準(作答紀錄的「我/對方」要互換) */
+function applySync(d){
+  var a={},h=[],k;
+  if(d.ans&&typeof d.ans==="object"&&!Array.isArray(d.ans)){
+    for(k in d.ans){var v=d.ans[k]|0;if(v>=1&&v<=3)a[k]=((v&1)<<1)|((v&2)>>1)}
+  }
+  if(Array.isArray(d.hist)){
+    d.hist.slice(-300).forEach(function(x){
+      if(x&&typeof x.q==="string"&&typeof x.n==="string"&&typeof x.ts==="number")h.push({q:x.q.slice(0,300),n:x.n.slice(0,30),ts:x.ts});
+    });
+  }
+  ans=a;hist=h;saveAns();saveHist();renderHist();
+  render("✅ 已同步房主的題目紀錄");
+  setTimeout(function(){if(!busy)render()},1000);   /* 顯示一秒後,改回原本的狀態文字 */
+}
 function doSpin(q,pw){
   if(busy||!connected)return;
   pw=Math.max(0,Math.min(1,Number(pw)||0));
-  var v0=870+pw*1330,dur=3.4+pw*1.6,turns=Math.max(3,Math.round(v0*dur/2.77/360-.5));
-  var d={type:"spin",t:Math.random()<.5?0:1,off:20+Math.random()*140,turns:turns,dur:dur,pw:pw,q:q};
+  /* 結果由房主用加密亂數決定,和力道完全無關;力道只影響「轉得多猛」,而且圈數、時間都再加隨機抖動,
+     所以看圈數或時間長短,都推不出會停在誰那邊 */
+  q=nextQuestion();                      /* 題目一律由房主抽,避免兩邊紀錄不同步 */
+  var st=ans[q]||0,t;
+  if(st===1)t=1-meIdx();                 /* 我(房主)答過這題 → 一定轉到對方 */
+  else if(st===2)t=meIdx();              /* 對方答過這題 → 一定轉到我 */
+  else t=rnd()<.5?0:1;                   /* 沒人答過 → 純隨機 */
+  var turns=Math.round(4+pw*7+(rnd()*3-1.5));
+  var dur=3.6+pw*1.4+rnd()*1.4;
+  var off=15+rnd()*150;
+  var e=EASES[Math.floor(rnd()*EASES.length)];
+  var d={type:"spin",t:t,off:off,turns:turns,dur:dur,pw:pw,q:q,e:e};
   conn.send(d);runSpin(d);
 }
 function runSpin(d){
   if(busy)return;
+  stopWatch();
   var t=d.t===1?1:0,off=Math.max(15,Math.min(165,Number(d.off)||90)),turns=Math.max(3,Math.min(14,Number(d.turns)||3)),dur=Math.max(2.5,Math.min(6.5,Number(d.dur)||4.6)),pw=Math.max(0,Math.min(1,Number(d.pw)||0));
   var q=typeof d.q==="string"?d.q.slice(0,300):"(空白題目)";
-  if(used.indexOf(q)<0){used.push(q);saveUsed()}
-  busy=true;$("spin").disabled=true;$("result").classList.add("hidden");$("status").textContent="轉動中…"+(d.pw!=null?"(力道 "+Math.round(pw*100)+"%)":"");
+  var e=Array.isArray(d.e)&&d.e.length===4&&d.e.every(function(v){return typeof v==="number"&&v>=0&&v<=1})?d.e:EASES[0];
+  ansIdx=t;
+  ans[q]=(ans[q]||0)|(t===meIdx()?1:2);saveAns();
+  busy=true;$("spin").disabled=true;if(!ch)$("spin").textContent=spinLabel();$("result").classList.add("hidden");$("status").textContent="轉動中…"+(d.pw!=null?"(力道 "+Math.round(pw*100)+"%)":"");
   var prev=rot;
   var base=prev+360*turns,tgt=-(t*180+off);
   rot=base+((((tgt-base)%360)+360)%360);
-  var w=$("wheel");w.style.transition="transform "+dur+"s cubic-bezier(.22,.61,.36,1)";w.style.transform="rotate("+rot+"deg)";
-  playSpin(rot-prev,dur);
+  var w=$("wheel");w.style.transition="transform "+dur+"s cubic-bezier("+e.join(",")+")";w.style.transform="rotate("+rot+"deg)";
+  playSpin(rot-prev,dur,e);
   clearTimeout(timer);
   timer=setTimeout(function(){
     var mine=(t===meIdx()),nm=names()[t]||"?";
@@ -526,18 +573,24 @@ function runSpin(d){
     var b=document.createElement("b");b.textContent=nm;if(mine)b.className="me";
     var c=document.createElement("span");c.textContent=mine?" 回答!(就是你)":" 回答!";
     who.appendChild(a);who.appendChild(b);who.appendChild(c);
-    $("question").textContent=q;$("result").classList.remove("hidden");$("status").textContent="";
+    $("question").textContent=q;$("result").classList.remove("hidden");$("status").textContent="";roleUI();
   },Math.round(dur*1000)+100);
+}
+function roleUI(){
+  var answering=(ansIdx===meIdx()),nx=$("next");
+  nx.disabled=answering;
+  nx.textContent=answering?"🎤 發言中…":"下一題 ➜";
+  $("hint").textContent=answering?"等對方聽到滿意,由對方按「下一題」":"對方回答到你滿意後,請由你按「下一題」";
 }
 function doNext(){
   if(!busy)return;
-  clearTimeout(timer);busy=false;$("result").classList.add("hidden");render();
+  clearTimeout(timer);busy=false;spinner=ansIdx;ansIdx=-1;$("result").classList.add("hidden");render();
 }
 $("nm").value=load("tod_name")||"";$("rm").value=load("tod_room")||"";
 $("snd").onclick=function(){muted=!muted;save("tod_mute",muted?"1":"0");renderSnd();audio()};
 renderSnd();
 $("hbtn").onclick=function(){$("hist").classList.toggle("hidden")};
-function clearMem(){used=[];hist=[];saveUsed();saveHist();renderHist()}
+function clearMem(){ans={};hist=[];saveAns();saveHist();renderHist()}
 $("hclr").onclick=function(){
   if(!confirm(connected?"清除雙方的歷史紀錄和已抽過的題目?":"清除這台裝置上的歷史紀錄和已抽過的題目?(對方未連線,不會同步)"))return;
   clearMem();
@@ -548,6 +601,22 @@ $("go").onclick=start;
 var HOLD_MAX=1800,ch=null,spinBtn=$("spin"),wheelWrap=document.querySelector(".wheelwrap"),gameEl=$("game"),spWrap=document.querySelector(".spinwrap");
 var reduceMotion=window.matchMedia&&matchMedia("(prefers-reduced-motion:reduce)").matches;
 var SPARK=["#ffd36b","#ffffff","#ff9ec0","#ffb36b","#c6baff"];
+var hapLabel=null;
+function hapInit(){
+  if(hapLabel||!document.body)return;
+  try{
+    var l=document.createElement("label");l.setAttribute("aria-hidden","true");
+    l.style.cssText="position:fixed;left:0;top:0;width:1px;height:1px;overflow:hidden;opacity:.01;pointer-events:none;z-index:-1";
+    var i=document.createElement("input");i.type="checkbox";i.setAttribute("switch","");i.tabIndex=-1;
+    l.appendChild(i);document.body.appendChild(l);hapLabel=l;
+  }catch(e){}
+}
+function haptic(ms){
+  if(navigator.vibrate){try{navigator.vibrate(ms)}catch(e){}return}
+  /* iOS Safari 不支援 vibrate:改點隱藏的 <input type=checkbox switch> 觸發系統觸覺回饋(iOS 17.4+,只會輕點一下) */
+  hapInit();
+  try{if(hapLabel)hapLabel.click()}catch(e){}
+}
 function setPower(p){gameEl.style.setProperty("--p",p.toFixed(3))}
 function toneStart(){
   if(muted)return null;var c=audio();if(!c)return null;
@@ -574,6 +643,36 @@ function sparkBurst(p){
     spark(w/2+(Math.random()-.5)*w*.5,h/2,Math.cos(a)*r,Math.sin(a)*r*.8);
   }
 }
+/* ===== 觀看對方蓄力(兩邊同步):對方按下/放開時各傳一次訊號,這邊用同樣的速度自己跑動畫 ===== */
+var watch=null;
+function sendCharge(on){try{if(connected&&conn)conn.send({type:"charge",on:on})}catch(e){}}
+function watchLoop(){
+  if(!watch)return;
+  if(!connected||busy||performance.now()-watch.t0>20000){stopWatch();return}
+  var p=Math.min(1,(performance.now()-watch.t0)/HOLD_MAX);
+  setPower(p);toneSet(watch.tone,p);
+  var pct=Math.round(p*100);
+  if(pct!==watch.pct){
+    watch.pct=pct;
+    spinBtn.textContent=short(oppName||"對方")+(p>=1?" MAX!":" 蓄力中… "+pct+"%");
+    if(p>=1)spinBtn.classList.add("max");
+  }
+  if(!reduceMotion&&Math.random()<.08+p*.4)sparkRise();
+  watch.raf=requestAnimationFrame(watchLoop);
+}
+function startWatch(){
+  if(watch||ch||busy||!connected)return;
+  audio();
+  watch={t0:performance.now(),pct:-1,raf:0,tone:toneStart()};
+  spinBtn.classList.add("charging");wheelWrap.classList.add("charging");
+  watchLoop();
+}
+function stopWatch(){
+  if(!watch)return;
+  cancelAnimationFrame(watch.raf);toneStop(watch.tone);watch=null;
+  spinBtn.classList.remove("charging","max");wheelWrap.classList.remove("charging");
+  setPower(0);spinBtn.textContent=spinLabel();
+}
 function chargeLoop(){
   if(!ch)return;
   if(spinBtn.disabled||!connected||busy){chargeEnd(false);return}
@@ -585,30 +684,32 @@ function chargeLoop(){
     spinBtn.textContent=p>=1?"MAX!  放開!":"蓄力中… "+pct+"%";
     if(p>=1)spinBtn.classList.add("max");
     var step=Math.floor(p*4);
-    if(step>ch.step){ch.step=step;try{navigator.vibrate&&navigator.vibrate(12)}catch(e){}}
+    if(step>ch.step){ch.step=step;haptic(12)}
   }
   if(!reduceMotion&&Math.random()<.08+p*.4)sparkRise();
   ch.raf=requestAnimationFrame(chargeLoop);
 }
 function chargeStart(e){
-  if(ch||spinBtn.disabled||!connected||busy)return;
+  if(ch||watch||spinBtn.disabled||!connected||busy)return;
+  haptic(10)
   if(e&&e.pointerId!=null){try{spinBtn.setPointerCapture(e.pointerId)}catch(x){}}
   audio();
   ch={t0:performance.now(),p:0,pct:-1,step:0,raf:0,tone:toneStart()};
   spinBtn.classList.add("charging");wheelWrap.classList.add("charging");
+  sendCharge(true);
   chargeLoop();
 }
 function chargeEnd(fire){
   if(!ch)return;
   var p=Math.min(1,(performance.now()-ch.t0)/HOLD_MAX);
-  cancelAnimationFrame(ch.raf);toneStop(ch.tone);ch=null;
+  cancelAnimationFrame(ch.raf);toneStop(ch.tone);ch=null;sendCharge(false);
   spinBtn.classList.remove("charging","max");wheelWrap.classList.remove("charging");
-  setPower(0);spinBtn.textContent="轉!";
+  setPower(0);spinBtn.textContent=spinLabel();
   if(fire&&connected&&!busy&&!spinBtn.disabled){
+    haptic(20+Math.round(p*40))
     if(!reduceMotion)sparkBurst(p);
-    var q=nextQuestion();
-    if(isHost)doSpin(q,p);
-    else{conn.send({type:"req",q:q,pw:p});spinBtn.disabled=true;setTimeout(function(){if(!busy)render()},3000)}
+    if(isHost)doSpin(null,p);
+    else{conn.send({type:"req",pw:p});spinBtn.disabled=true;setTimeout(function(){if(!busy)render()},3000)}
   }
 }
 spinBtn.addEventListener("pointerdown",function(e){if(e.button>0)return;e.preventDefault();chargeStart(e)});
@@ -619,7 +720,7 @@ spinBtn.addEventListener("contextmenu",function(e){e.preventDefault()});
 spinBtn.addEventListener("keydown",function(e){if((e.key===" "||e.key==="Enter")&&!e.repeat){e.preventDefault();chargeStart()}});
 spinBtn.addEventListener("keyup",function(e){if(e.key===" "||e.key==="Enter"){e.preventDefault();chargeEnd(true)}});
 spinBtn.addEventListener("blur",function(){chargeEnd(false)});
-$("next").onclick=function(){if(connected)conn.send({type:"next"});doNext()};
+$("next").onclick=function(){if(!connected||!busy||ansIdx===meIdx())return;conn.send({type:"next"});doNext()};
 /* ===== 天氣 / 時段背景(太陽開關)===== */
 var SKY_KEY="tod_sky",WX_KEY="tod_wx",LOC_KEY="tod_loc";
 var skyOn=false,skyBtn=$("skybtn"),skyToastT=null,skyTick=null,skyPoll=null,preview=null;
