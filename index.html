@@ -137,13 +137,13 @@ footer{text-align:center;margin-top:22px;font-size:12px;color:var(--mute)}
 :root[data-phase="dusk"]{--bg1:#c9a8e6;--bg2:#ffd0b0;--glow:rgba(255,150,120,.5);--card:rgba(255,255,255,.78);--ink:#3a2434;--mute:#4c3350;--line:#e6cfe6;--title:#7a1f55;--shadow:0 12px 32px rgba(120,70,150,.2);--rim1:#ffffff;--rim2:#f0d0e8;--field:rgba(255,255,255,.88);--s1:rgba(255,255,255,.55);--s2:#e3c4ec;--s3:#d49ccd;--lav:#c8b8f5;--cloud:rgba(255,255,255,.7)}
 :root[data-phase="night"]{--bg1:#0c1033;--bg2:#261b52;--glow:rgba(120,130,255,.18);--card:rgba(30,30,66,.84);--ink:#f4eefc;--mute:#b8b4d8;--line:#3d3c78;--title:#ff9fc4;--shadow:0 12px 32px rgba(0,0,0,.45);--rim1:#4a4a8c;--rim2:#2a2a62;--field:rgba(0,0,0,.28);--s1:rgba(255,255,255,.05);--s2:#2c2b66;--s3:#403d8c;--lav:#4c47a8;--cloud:rgba(255,255,255,.07)}
 html[data-phase="night"] h1{text-shadow:none}
-html{--tint:transparent;--cloudc:rgba(255,255,255,.8);--fogc:rgba(240,244,248,.65)}
-html[data-wx="cloudy"]{--tint:rgba(150,160,175,.26)}
-html[data-wx="rain"]{--tint:rgba(110,125,150,.36);--cloudc:rgba(200,208,222,.8)}
-html[data-wx="storm"]{--tint:rgba(55,60,90,.5);--cloudc:rgba(120,125,150,.85)}
+html{--tint:transparent;--cloudc:rgba(255,255,255,.8);--fogc:rgba(240,244,248,.65);--raincol:rgba(70,110,175,.75);--snowedge:rgba(140,165,210,.85)}
+html[data-wx="cloudy"]{--tint:rgba(150,160,175,.26);--cloudc:rgba(190,198,212,.8)}
+html[data-wx="rain"]{--tint:rgba(110,125,150,.42);--cloudc:rgba(150,160,180,.78)}
+html[data-wx="storm"]{--tint:rgba(55,60,90,.5);--cloudc:rgba(95,100,125,.88)}
 html[data-wx="fog"]{--tint:rgba(236,240,245,.5)}
 html[data-wx="snow"]{--tint:rgba(235,242,255,.3)}
-html[data-phase="night"]{--cloudc:rgba(160,170,215,.22);--fogc:rgba(120,130,170,.4)}
+html[data-phase="night"]{--cloudc:rgba(160,170,215,.22);--fogc:rgba(120,130,170,.4);--raincol:rgba(205,225,255,.7);--snowedge:rgba(255,255,255,.35)}
 html[data-phase="night"][data-wx="cloudy"]{--tint:rgba(20,22,45,.25)}
 html[data-phase="night"][data-wx="rain"]{--tint:rgba(15,20,45,.35)}
 html[data-phase="night"][data-wx="storm"]{--tint:rgba(5,5,20,.45)}
@@ -151,7 +151,7 @@ html[data-phase="night"][data-wx="fog"]{--tint:rgba(120,130,160,.25)}
 html[data-phase="night"][data-wx="snow"]{--tint:rgba(150,165,200,.2)}
 #skyfx{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden;opacity:0;transition:opacity 1.2s}
 html[data-sky] #skyfx{opacity:1}
-#skyfx>div{position:absolute;opacity:0;transition:opacity 1.5s}
+.sx-tint,.sx-sun,.sx-moon,.sx-stars,.sx-cld,.sx-fog,.sx-rain,.sx-snow,.sx-flash{position:absolute;opacity:0;transition:opacity 1.5s}
 .sx-tint{inset:0;background:var(--tint)}
 html[data-sky] .sx-tint{opacity:1}
 .sx-sun{inset:0;--sx:85%;--sy:9%;--sc:255,226,140;background:radial-gradient(circle at var(--sx) var(--sy),rgba(var(--sc),.95) 0 34px,rgba(var(--sc),.38) 35px 92px,rgba(var(--sc),.14) 93px 230px,transparent 360px)}
@@ -177,17 +177,17 @@ html[data-phase="night"][data-wx="cloudy"] .sx-moon,html[data-phase="night"][dat
 @keyframes drift{from{transform:translateX(-340px)}to{transform:translateX(calc(100vw + 340px))}}
 html[data-wx="partly"] .sx-c1,html[data-wx="partly"] .sx-c2{opacity:1}
 html[data-wx="cloudy"] .sx-cld,html[data-wx="rain"] .sx-cld,html[data-wx="storm"] .sx-cld,html[data-wx="snow"] .sx-cld,html[data-wx="fog"] .sx-cld{opacity:1}
-.sx-rain{left:-10%;top:-120px;width:120%;height:calc(100% + 240px)}
+.sx-rain{left:-30%;top:-160px;width:160%;height:calc(100% + 320px);transform:rotate(12deg)}
 .sx-rain::before,.sx-rain::after{content:"";position:absolute;inset:0}
-.sx-rain::before{background-image:linear-gradient(100deg,transparent 47%,rgba(205,225,255,.55) 50%,transparent 53%);background-size:26px 72px;animation:fall72 .5s linear infinite}
-.sx-rain::after{background-image:linear-gradient(100deg,transparent 47%,rgba(205,225,255,.3) 50%,transparent 53%);background-size:41px 113px;animation:fall113 .8s linear infinite}
-@keyframes fall72{to{transform:translateY(72px)}}
-@keyframes fall113{to{transform:translateY(113px)}}
+.sx-rain::before{background-image:radial-gradient(ellipse 1.6px 11px at 10px 24px,var(--raincol),transparent),radial-gradient(ellipse 1.6px 11px at 34px 92px,var(--raincol),transparent),radial-gradient(ellipse 1.6px 11px at 58px 52px,var(--raincol),transparent),radial-gradient(ellipse 1.6px 11px at 76px 118px,var(--raincol),transparent),radial-gradient(ellipse 1.6px 11px at 22px 66px,var(--raincol),transparent);background-size:90px 140px;animation:fall140 .55s linear infinite}
+.sx-rain::after{background-image:radial-gradient(ellipse 1.6px 11px at 20px 30px,var(--raincol),transparent),radial-gradient(ellipse 1.6px 11px at 70px 150px,var(--raincol),transparent),radial-gradient(ellipse 1.6px 11px at 100px 70px,var(--raincol),transparent),radial-gradient(ellipse 1.6px 11px at 40px 110px,var(--raincol),transparent),radial-gradient(ellipse 1.6px 11px at 115px 24px,var(--raincol),transparent);background-size:130px 190px;animation:fall190 .8s linear infinite}
+@keyframes fall140{to{transform:translateY(140px)}}
+@keyframes fall190{to{transform:translateY(190px)}}
 html[data-wx="rain"] .sx-rain,html[data-wx="storm"] .sx-rain{opacity:1}
 .sx-snow{left:-10%;top:-320px;width:120%;height:calc(100% + 640px)}
 .sx-snow::before,.sx-snow::after{content:"";position:absolute;inset:0}
-.sx-snow::before{background-image:radial-gradient(2.6px 2.6px at 24px 40px,#fff,transparent),radial-gradient(2px 2px at 120px 110px,#fff,transparent),radial-gradient(3px 3px at 70px 170px,#fff,transparent),radial-gradient(2px 2px at 170px 20px,#fff,transparent);background-size:200px 200px;animation:fall200 9s linear infinite}
-.sx-snow::after{background-image:radial-gradient(3px 3px at 50px 60px,#fff,transparent),radial-gradient(2.4px 2.4px at 210px 150px,#fff,transparent),radial-gradient(2px 2px at 120px 250px,#fff,transparent),radial-gradient(3px 3px at 260px 20px,#fff,transparent);background-size:300px 300px;animation:fall300 14s linear infinite}
+.sx-snow::before{background-image:radial-gradient(2.8px 2.8px at 24px 40px,#fff 0 45%,var(--snowedge) 75%,transparent),radial-gradient(2.4px 2.4px at 120px 110px,#fff 0 45%,var(--snowedge) 75%,transparent),radial-gradient(3.2px 3.2px at 70px 170px,#fff 0 45%,var(--snowedge) 75%,transparent),radial-gradient(2.4px 2.4px at 170px 24px,#fff 0 45%,var(--snowedge) 75%,transparent);background-size:200px 200px;animation:fall200 9s linear infinite}
+.sx-snow::after{background-image:radial-gradient(3.2px 3.2px at 50px 60px,#fff 0 45%,var(--snowedge) 75%,transparent),radial-gradient(2.6px 2.6px at 210px 150px,#fff 0 45%,var(--snowedge) 75%,transparent),radial-gradient(2.4px 2.4px at 120px 250px,#fff 0 45%,var(--snowedge) 75%,transparent),radial-gradient(3.2px 3.2px at 260px 28px,#fff 0 45%,var(--snowedge) 75%,transparent);background-size:300px 300px;animation:fall300 14s linear infinite}
 @keyframes fall200{to{transform:translateY(200px)}}
 @keyframes fall300{to{transform:translateY(300px)}}
 html[data-wx="snow"] .sx-snow{opacity:1}
@@ -725,7 +725,7 @@ $("next").onclick=function(){if(!connected||!busy||ansIdx===meIdx())return;conn.
 <script>
 (function(){
 var html=document.documentElement,btn=document.getElementById("skybtn"),tip=document.getElementById("skytip");
-var KEY="tod_sky",on=false,info=null,pos=null,fetchedAt=0,tipT=0,busy=false;
+var KEY="tod_sky",CK="tod_sky_cache",on=false,info=null,pos=null,fetchedAt=0,failAt=0,tipT=0,busy=false,pend=false,recheck=false;
 var WXN={clear:"晴天",partly:"多雲時晴",cloudy:"陰天",fog:"起霧",rain:"下雨",snow:"下雪",storm:"雷雨"};
 var PHN={dawn:"日出",day:"白天",dusk:"黃昏",night:"夜晚"};
 function ls(k,v){try{if(v===undefined)return localStorage.getItem(k);localStorage.setItem(k,v)}catch(e){return null}}
@@ -767,45 +767,82 @@ function apply(){
   html.setAttribute("data-wx",info&&info.ok?info.kind:"clear");
   btn.setAttribute("aria-pressed","true");btn.title="背景:跟隨當地("+describe()+"),點一下關閉";
 }
+/* 快取:座標永久記著(下次不用再等定位),天氣記 3 小時內有效 */
+function loadCache(){
+  try{
+    var c=JSON.parse(ls(CK)||"null");
+    if(c&&c.pos&&typeof c.pos.lat==="number"&&typeof c.pos.lon==="number"){
+      pos=c.pos;
+      if(c.info&&c.info.ok&&Date.now()-c.t<3*3600000){info=c.info;fetchedAt=c.t}
+    }
+  }catch(e){}
+}
+function saveCache(){if(pos)ls(CK,JSON.stringify({pos:pos,info:info&&info.ok?info:null,t:fetchedAt}))}
 function locate(){
   return new Promise(function(res,rej){
-    if(!navigator.geolocation){rej({why:"此瀏覽器不支援定位"});return}
+    if(!navigator.geolocation){rej({why:"此瀏覽器不支援定位",denied:true});return}
     navigator.geolocation.getCurrentPosition(
       function(p){res({lat:p.coords.latitude,lon:p.coords.longitude})},
-      function(e){rej({why:e&&e.code===1?"沒有位置權限":"無法取得位置"})},
+      function(e){var d=!!(e&&e.code===1);rej({why:d?"沒有位置權限":"無法取得位置",denied:d})},
       {timeout:10000,maximumAge:3600000});
   });
 }
 function fetchWx(q){
-  var url="https://api.open-meteo.com/v1/forecast?latitude="+q.lat.toFixed(2)+"&longitude="+q.lon.toFixed(2)+"&current=weather_code&daily=sunrise,sunset&timezone=auto&forecast_days=1";
+  var url="https://api.open-meteo.com/v1/forecast?latitude="+q.lat.toFixed(2)+"&longitude="+q.lon.toFixed(2)+"&current=weather_code,precipitation,rain,showers,snowfall,cloud_cover&daily=sunrise,sunset&timezone=auto&forecast_days=1";
   return fetch(url).then(function(r){if(!r.ok)throw {why:"天氣服務暫時無法使用"};return r.json()}).then(function(j){
     var off=(j.utc_offset_seconds|0)*1000,d=j.daily||{};
     var sr=d.sunrise&&d.sunrise[0]?Date.parse(d.sunrise[0]+"Z")-off:0;
     var ss=d.sunset&&d.sunset[0]?Date.parse(d.sunset[0]+"Z")-off:0;
     var cur=j.current||{},code=(cur.weather_code!=null?cur.weather_code:cur.weathercode)|0;
-    info={ok:true,kind:codeToWx(code),sr:isNaN(sr)?0:sr,ss:isNaN(ss)?0:ss};
+    var kind=codeToWx(code);
+    /* 天氣代碼有時還是「陰天」但其實正在下雨,所以再用降水量、雲量校正 */
+    var wet=(cur.precipitation||0)>0||(cur.rain||0)>0||(cur.showers||0)>0,cc=cur.cloud_cover;
+    if((cur.snowfall||0)>0&&kind!=="storm")kind="snow";
+    else if(wet&&kind!=="snow"&&kind!=="storm")kind="rain";
+    else if((kind==="clear"||kind==="partly")&&typeof cc==="number"){
+      if(cc>=85)kind="cloudy";else if(cc>=40&&kind==="clear")kind="partly";
+    }
+    info={ok:true,kind:kind,sr:isNaN(sr)?0:sr,ss:isNaN(ss)?0:ss};
     fetchedAt=Date.now();
   });
 }
+function relocate(){
+  locate().then(function(q){
+    var moved=!pos||Math.abs(q.lat-pos.lat)>.2||Math.abs(q.lon-pos.lon)>.2;
+    pos=q;saveCache();
+    if(moved)refresh(true);
+  }).catch(function(){});
+}
 function refresh(force){
-  if(!on||busy)return Promise.resolve();
-  if(!force&&info&&info.ok&&Date.now()-fetchedAt<30*60000)return Promise.resolve();
+  if(busy)return Promise.resolve();
+  if(!force){
+    if(info&&info.ok&&Date.now()-fetchedAt<30*60000)return Promise.resolve();
+    if(info&&!info.ok&&(info.denied||Date.now()-failAt<10*60000))return Promise.resolve();
+  }
   busy=true;
+  var fromCache=!!pos;
   var p=pos?Promise.resolve(pos):locate().then(function(q){pos=q;return q});
   return p.then(fetchWx).catch(function(e){
-    info={ok:false,kind:"clear",sr:0,ss:0,why:(e&&e.why)||"抓不到天氣"};
-  }).then(function(){busy=false;apply()});
+    failAt=Date.now();
+    if(!(info&&info.ok))info={ok:false,kind:"clear",sr:0,ss:0,why:(e&&e.why)||"抓不到天氣",denied:!!(e&&e.denied)};
+  }).then(function(){
+    busy=false;saveCache();apply();
+    if(pend){pend=false;if(on)say("跟隨當地:"+describe(),3500)}
+    if(fromCache&&!recheck){recheck=true;relocate()}
+  });
 }
 function toggle(){
-  on=!on;ls(KEY,on?"1":"0");
-  if(!on){apply();say("已關閉,使用預設背景");return}
-  apply();say("正在取得當地天氣…",8000);
-  refresh(true).then(function(){say("跟隨當地:"+describe(),3500)});
+  on=!on;ls(KEY,on?"1":"0");apply();
+  if(!on){say("已關閉,使用預設背景");return}
+  if(info&&(info.ok||info.denied)){say("跟隨當地:"+describe(),3500);return}
+  say("正在取得當地天氣…",8000);pend=true;
+  if(!busy)refresh(true);
 }
 btn.addEventListener("click",toggle);
-setInterval(function(){if(on){apply();refresh(false)}},60000);
-document.addEventListener("visibilitychange",function(){if(!document.hidden&&on){apply();refresh(false)}});
-if(ls(KEY)==="1"){on=true;apply();refresh(true)}
+setInterval(function(){if(on)apply();refresh(false)},60000);
+document.addEventListener("visibilitychange",function(){if(!document.hidden){if(on)apply();refresh(false)}});
+/* 一進頁面就先取天氣(不用等按開關);有快取的話畫面立刻就有 */
+loadCache();on=(ls(KEY)==="1");apply();refresh(false);
 })();
 </script>
 </body>
