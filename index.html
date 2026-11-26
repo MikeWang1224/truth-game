@@ -127,6 +127,7 @@ footer{text-align:center;margin-top:22px;font-size:12px;color:var(--mute)}
  #spin{margin-top:14px}
 }
 #status:empty{display:none}
+#retry{margin-top:8px}
 
 /* ---- 蓄力按鈕特效 ---- */
 #game{--p:0}
@@ -312,6 +313,7 @@ html[data-wx="rain"] .sx-stars::after,html[data-wx="storm"] .sx-stars::after,htm
     <div class="roomtab"><span class="roomlbl">房號</span><b id="roomtag"></b></div>
     <div class="players"><span id="p0" class="pl pl0">等待中…</span><b class="vs">VS</b><span id="p1" class="pl pl1">等待對方…</span></div>
     <div class="small" id="status"></div>
+    <div style="text-align:center"><button id="retry" class="alt hidden" type="button">🔄 重新連線</button></div>
   </div>
   <div class="stage">
     <div class="wheelwrap">
@@ -473,44 +475,99 @@ function start(){
   hostId="tod-"+code+"-host";
   roomCode=code;$("roomtag").textContent=code;save("tod_name",$("nm").value.trim());save("tod_room",$("rm").value.trim());loadMem();
   $("setup").classList.add("hidden");$("game").classList.remove("hidden");wakeOn();
+  discSince=Date.now();retryN=0;
   render("連線中…");
   if(typeof Peer==="undefined"){render("⚠️ 無法載入連線元件,請檢查網路");return}
   becomeHost();
 }
+/* ===================== 連線:自動重試、逾時、心跳、背景回來自動接上 ===================== */
+var myCid=(function(){var v=null;try{v=localStorage.getItem("tod_cid")}catch(e){}if(!v){v=Math.random().toString(36).slice(2)+Date.now().toString(36);try{localStorage.setItem("tod_cid",v)}catch(e){}}return v})();
+var oppCid="",lastRx=0,rxN=0,retryN=0,discSince=0,everConnected=false,lastAttempt=0,connTimer=0,rejoinTimer=null,recTimer=0,wake=null,pingTimer=null;
 function becomeHost(){
-  peer=new Peer(hostId,PEER_OPTS);
-  peer.on("open",function(){isHost=true;render()});
-  peer.on("connection",function(c){if(conn&&connected){c.close();return}setup(c)});
-  peer.on("error",function(e){
-    if(e.type==="unavailable-id"){try{peer.destroy()}catch(x){}becomeGuest()}
-    else render("⚠️ 連線錯誤:"+e.type);
+  var p=peer=new Peer(hostId,PEER_OPTS);
+  p.on("open",function(){if(peer!==p)return;isHost=true;retryN=0;render()});
+  p.on("connection",function(c){
+    if(peer!==p){try{c.close()}catch(e){}return}
+    if(conn&&connected)challenge(c);else setup(c);
+  });
+  p.on("disconnected",function(){if(peer===p&&!p.destroyed)reconnectSignal(p,0)});
+  p.on("error",function(e){
+    if(peer!==p)return;
+    if(e.type==="unavailable-id"){try{p.destroy()}catch(x){}becomeGuest()}
+    else onPeerError(e)
   });
 }
 function becomeGuest(){
   isHost=false;
-  peer=new Peer(undefined,PEER_OPTS);
-  peer.on("open",function(){setup(peer.connect(hostId,{reliable:true}))});
-  peer.on("error",function(e){
-    if(e.type==="peer-unavailable"){render("房主不在,正在重新嘗試…");rejoin(2000)}
-    else render("⚠️ 連線錯誤:"+e.type);
+  var p=peer=new Peer(undefined,PEER_OPTS);
+  p.on("open",function(){
+    if(peer!==p)return;
+    setup(p.connect(hostId,{reliable:true}));
+    clearTimeout(connTimer);
+    connTimer=setTimeout(function(){                       /* 12 秒內沒連上就放棄這次,換個方式重來 */
+      if(peer!==p||connected)return;
+      render("連不上房主,重新嘗試中…");scheduleRejoin();
+    },12000);
+  });
+  p.on("disconnected",function(){if(peer===p&&!p.destroyed)reconnectSignal(p,0)});
+  p.on("error",function(e){
+    if(peer!==p)return;
+    if(e.type==="peer-unavailable"){render("房主不在,正在重新嘗試…");scheduleRejoin()}
+    else onPeerError(e)
   });
 }
-var rejoinTimer=null;
+function onPeerError(e){
+  var t=(e&&e.type)||"unknown";
+  if(t==="browser-incompatible"||t==="invalid-id"||t==="invalid-key"||t==="ssl-unavailable"){render("⚠️ 連線錯誤:"+t);return}   /* 這幾種重試也沒用 */
+  render("連線不穩,正在重新嘗試…("+t+")");scheduleRejoin();
+}
+function scheduleRejoin(){var ms=Math.min(1500*Math.pow(1.6,retryN),10000);retryN++;rejoin(ms)}
 function rejoin(ms){
-  clearTimeout(rejoinTimer);
+  clearTimeout(rejoinTimer);clearTimeout(connTimer);
   rejoinTimer=setTimeout(function(){
+    lastAttempt=Date.now();
     var old=peer;peer=null;conn=null;connected=false;
     try{if(old)old.destroy()}catch(x){}
     becomeHost();
   },ms||0);
 }
+/* 連線伺服器斷了(換網路、被系統凍結):房間代號會失效,要自己重連;失敗就退避後再試 */
+function reconnectSignal(p,n){
+  clearTimeout(recTimer);
+  recTimer=setTimeout(function(){
+    if(peer!==p||p.destroyed||!p.disconnected)return;
+    if(!isHost&&connected)return;                        /* 訪客連上之後就不需要連線伺服器了 */
+    try{p.reconnect()}catch(e){}
+    setTimeout(function(){if(peer===p&&!p.destroyed&&p.disconnected)reconnectSignal(p,n+1)},4000);
+  },Math.min(800*Math.pow(1.5,n),8000));
+}
+function resetRound(){stopWatch();connected=false;oppName="";oppCid="";busy=false;ansIdx=-1;spinner=-1;clearTimeout(timer);clearTimeout(pingTimer);$("result").classList.add("hidden")}
 function onLinkClosed(c){
-  if(c!==conn)return;
-  stopWatch();connected=false;oppName="";busy=false;ansIdx=-1;spinner=-1;clearTimeout(timer);clearTimeout(pingTimer);$("result").classList.add("hidden");
+  if(c!==conn||c._dead)return;
+  c._dead=true;
+  resetRound();discSince=Date.now();
   if(isHost)render("對方已離線,等待重新連線…");
   else{render("房主已離開,正在接手房間…");rejoin(300)}
 }
-var wake=null,pingTimer=null;
+function linkDead(c){try{c.close()}catch(e){}onLinkClosed(c)}
+/* 房主已經有連線時又有人連進來:同一個人換了條線就直接換;不確定的就先 ping 舊連線,舊的沒回應才換 */
+function challenge(c){
+  var old=conn,done=false,held=[],probe=0,n0=rxN;
+  function adopt(){
+    if(done)return;done=true;clearTimeout(probe);
+    if(old){old._dead=true;try{old.close()}catch(e){}}
+    resetRound();setup(c);
+    held.forEach(function(d){if(conn===c)onData(d)});
+  }
+  function reject(){if(done)return;done=true;clearTimeout(probe);try{c.close()}catch(e){}}
+  c.on("data",function(d){
+    if(done)return;held.push(d);
+    if(d&&d.type==="hello"&&d.cid&&oppCid&&String(d.cid)===oppCid)adopt();
+  });
+  c.on("close",reject);
+  try{old.send({type:"ping"})}catch(e){}
+  probe=setTimeout(function(){if(done)return;if(rxN>n0)reject();else adopt()},3000);
+}
 function wakeOn(){
   try{
     if(!navigator.wakeLock||wake||document.visibilityState!=="visible")return;
@@ -519,34 +576,67 @@ function wakeOn(){
     }).catch(function(){});
   }catch(e){}
 }
-function checkLink(){
+/* 主動確認連線還活著:任何訊息(不只 pong)都算活著 */
+function probeLink(ms){
+  var c=conn;if(!connected||!c)return;
+  var n0=rxN;
+  try{c.send({type:"ping"})}catch(e){}
+  clearTimeout(pingTimer);
+  pingTimer=setTimeout(function(){if(conn===c&&connected&&rxN===n0)linkDead(c)},ms);
+}
+/* 回到前景:該重連的重連,該確認的確認,沒連上就不用等退避馬上再試 */
+function resume(){
   if(!peer)return;
   if(peer.destroyed){rejoin(0);return}
-  if(peer.disconnected){try{peer.reconnect()}catch(e){}}
-  if(connected&&conn){
-    clearTimeout(pingTimer);
-    try{conn.send({type:"ping"})}catch(e){}
-    pingTimer=setTimeout(function(){
-      var c=conn;if(!connected||!c)return;
-      try{c.close()}catch(e){}
-      setTimeout(function(){if(connected&&conn===c)onLinkClosed(c)},150);
-    },2500);
+  if(peer.disconnected)reconnectSignal(peer,0);
+  if(connected&&conn){lastRx=Date.now();probeLink(6000)}
+  else if(!connected){
+    var healthyHost=isHost&&peer.open&&!peer.disconnected;
+    if(!healthyHost&&Date.now()-lastAttempt>3000){retryN=0;rejoin(0)}
   }
 }
-document.addEventListener("visibilitychange",function(){if(document.visibilityState==="visible"&&peer){wakeOn();checkLink()}});
-window.addEventListener("pageshow",function(e){if(e.persisted&&peer){wakeOn();checkLink()}});
-window.addEventListener("online",function(){if(peer)checkLink()});
+document.addEventListener("visibilitychange",function(){if(document.visibilityState==="visible"&&peer){wakeOn();resume()}});
+window.addEventListener("pageshow",function(e){if(e.persisted&&peer){wakeOn();resume()}});
+window.addEventListener("online",function(){if(peer)resume()});
+window.addEventListener("pagehide",function(){                 /* 離開頁面時馬上釋放房間,讓對方立刻知道、也不會留下幽靈房主 */
+  try{if(conn)conn.close()}catch(e){}
+  try{if(peer)peer.destroy()}catch(e){}
+});
+/* 定期心跳:前景時每 5 秒 ping 一次,超過 20 秒沒收到任何訊息就當作斷線 */
+setInterval(function(){
+  if(document.visibilityState!=="visible"||!connected||!conn)return;
+  try{conn.send({type:"ping"})}catch(e){}
+  if(Date.now()-lastRx>20000)linkDead(conn);
+},5000);
+/* 一直連不上時,出現手動「重新連線」按鈕 */
+setInterval(function(){
+  var btn=$("retry");if(!btn)return;
+  var show=!connected&&discSince&&((everConnected&&Date.now()-discSince>10000)||retryN>=2);
+  btn.classList.toggle("hidden",!show);
+},1000);
 function setup(c){
-  conn=c;
-  var opened=function(){connected=true;c.send({type:"hello",name:myName});if(isHost)c.send({type:"sync",ans:ans,hist:hist});render()};
+  conn=c;c._dead=false;
+  var opened=function(){
+    if(conn!==c)return;
+    clearTimeout(connTimer);retryN=0;discSince=0;everConnected=true;lastRx=Date.now();
+    connected=true;
+    c.send({type:"hello",name:myName,cid:myCid});
+    if(isHost)c.send({type:"sync",ans:ans,hist:hist});
+    render();
+  };
   c.on("open",opened);if(c.open)opened();
-  c.on("data",onData);
+  c.on("data",function(d){if(conn===c)onData(d)});
   c.on("close",function(){onLinkClosed(c)});
-  c.on("error",function(){render("⚠️ 連線中斷(兩邊網路可能無法直連,需設定 TURN)")});
+  c.on("error",function(){
+    if(conn!==c)return;
+    if(connected)render("⚠️ 連線不穩…");
+    else{render("連線失敗(可能兩邊網路無法直連),重新嘗試中…");if(!isHost)scheduleRejoin()}
+  });
 }
 function onData(d){
   if(!d||typeof d!=="object")return;
-  if(d.type==="hello"){oppName=String(d.name||"對方").slice(0,12);render()}
+  lastRx=Date.now();rxN++;
+  if(d.type==="hello"){oppName=String(d.name||"對方").slice(0,12);oppCid=String(d.cid||"").slice(0,60);render()}
   else if(d.type==="req"&&isHost&&(spinner===-1||spinner===1)){doSpin(null,d.pw)}
   else if(d.type==="spin"&&!isHost){runSpin(d)}
   else if(d.type==="next"){if(ansIdx===1-meIdx())return;doNext()}
@@ -761,6 +851,7 @@ spinBtn.addEventListener("keydown",function(e){if((e.key===" "||e.key==="Enter")
 spinBtn.addEventListener("keyup",function(e){if(e.key===" "||e.key==="Enter"){e.preventDefault();chargeEnd(true)}});
 spinBtn.addEventListener("blur",function(){chargeEnd(false)});
 $("next").onclick=function(){if(!connected||!busy||ansIdx===meIdx())return;conn.send({type:"next"});doNext()};
+$("retry").onclick=function(){retryN=0;discSince=Date.now();render("重新連線中…");rejoin(0)};
 })();
 </script>
 <script>
